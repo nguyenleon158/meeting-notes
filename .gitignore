@@ -1,0 +1,32 @@
+.DS_Store
+**/.DS_Store
+
+# Local tooling and deployment state
+.claude/
+.wrangler/
+.vscode/
+.idea/
+
+# Dependencies, generated output, and release binaries
+node_modules/
+coverage/
+build/
+dist/
+*.dmg
+*.exe
+*.zip
+*.tar.gz
+
+# Local meeting data. Keep only the documentation file.
+storage/*
+!storage/README.md
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.log
+*.pem
+*.key
+*.p12
+*.mobileprovision

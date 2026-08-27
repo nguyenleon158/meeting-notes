@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeetNote AI — Hướng dẫn sử dụng</title>
+  <meta name="description" content="Hướng dẫn cài đặt và sử dụng MeetNote AI v1.1.1 trên Windows và macOS.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* NguyenLeon Brand System */
+      --bg: #fbfaf7;
+      --bg-card: #ffffff;
+      --bg-code: #f4f2ee;
+      --text: #002d31;
+      --text-secondary: #4a605a;
+      --text-muted: #a0a0a0;
+      --accent: #dc143c;
+      --accent-hover: #b30e2f;
+      --accent-light: rgba(220, 20, 60, 0.08);
+      --gold: #b8882d;
+      --gold-light: rgba(184, 136, 45, 0.1);
+      --sage: #1a4335;
+      --sage-light: rgba(26, 67, 53, 0.08);
+      --border: #e2dfda;
+      --border-light: #eee9e3;
+      --shadow-sm: 0 1px 3px rgba(0,45,49,.04);
+      --shadow-md: 0 4px 20px rgba(0,45,49,.06);
+      --shadow-lg: 0 8px 32px rgba(0,45,49,.08);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-pill: 999px;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 16px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    ::selection {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    /* Typography anti-runt */
+    h1, h2, h3, h4, h5, h6 { text-wrap: balance; }
+    p, li, blockquote, figcaption { text-wrap: pretty; }
+
+    /* ===== Layout ===== */
+    .page-wrapper {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* --- Sidebar TOC --- */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 280px;
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--bg);
+      border-right: 1px solid var(--border);
+      padding: 28px 16px 40px;
+      z-index: 100;
+      transition: transform .3s cubic-bezier(.16,1,.3,1);
+    }
+
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      padding: 0 8px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-brand .logo {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      flex-shrink: 0;
+    }
+
+    .sidebar-brand .brand-text {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .sidebar-brand .brand-sub {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 400;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .toc-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      padding: 0 12px;
+    }
+
+    .toc-list {
+      list-style: none;
+    }
+
+    .toc-list a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      transition: all .2s ease;
+      line-height: 1.4;
+    }
+
+    .toc-list a .toc-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      width: 18px;
+    }
+
+    .toc-list a:hover {
+      color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .toc-list a.active {
+      color: var(--accent);
+      background: var(--accent-light);
+      font-weight: 600;
+    }
+
+    .toc-list a.active .toc-num {
+      color: var(--accent);
+    }
+
+    /* --- Main Content --- */
+    .main-content {
+      margin-left: 280px;
+      flex: 1;
+      max-width: 100%;
+    }
+
+    .content-wrapper {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 40px 80px;
+    }
+
+    /* --- Mobile Menu Toggle --- */
+    .menu-toggle {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      z-index: 200;
+      box-shadow: 0 4px 16px rgba(220,20,60,.3);
+      font-size: 18px;
+      align-items: center;
+      justify-content: center;
+      transition: all .2s;
+    }
+
+    .menu-toggle:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(220,20,60,.35);
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,45,49,.2);
+      backdrop-filter: blur(4px);
+      z-index: 99;
+    }
+
+    /* ===== Hero ===== */
+    .hero {
+      margin-bottom: 48px;
+      position: relative;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      top: -60px;
+      right: -120px;
+      width: 300px;
+      height: 300px;
+      background: var(--accent);
+      opacity: .03;
+      border-radius: 50%;
+      filter: blur(80px);
+      pointer-events: none;
+    }
+
+    .hero h1 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+      line-height: 1.3;
+      letter-spacing: -.02em;
+    }
+
+    .hero h1 .highlight {
+      color: var(--accent);
+    }
+
+    .hero .subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 5px 14px;
+      border-radius: var(--radius-pill);
+      margin-bottom: 16px;
+    }
+
+    .version-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse-dot 1.5s cubic-bezier(.4,0,.6,1) infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .4; }
+    }
+
+    /* ===== Section ===== */
+    .section {
+      margin-bottom: 48px;
+      scroll-margin-top: 24px;
+    }
+
+    .section h2 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      letter-spacing: -.01em;
+    }
+
+    .section h2 .sec-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-light);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+    }
+
+    .section h3 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin: 28px 0 12px;
+    }
+
+    .section h4 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin: 20px 0 8px;
+    }
+
+    .section p {
+      margin-bottom: 14px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .section ul, .section ol {
+      margin: 0 0 16px 20px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .section li {
+      margin-bottom: 8px;
+    }
+
+    .section li::marker {
+      color: var(--accent);
+    }
+
+    /* ===== Callout ===== */
+    .callout {
+      background: #fffcf0;
+      border-left: 3px solid var(--gold);
+      padding: 14px 18px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      margin: 16px 0;
+      font-size: 13px;
+      color: #6b5900;
+      line-height: 1.65;
+    }
+
+    .callout.info {
+      background: var(--sage-light);
+      border-color: var(--sage);
+      color: var(--sage);
+    }
+
+    .callout.warning {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent-hover);
+    }
+
+    /* ===== Code ===== */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      background: var(--bg-code);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    pre {
+      background: #0f0d0c;
+      color: #d4d0c8;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      overflow-x: auto;
+      margin: 14px 0 18px;
+      font-size: 13px;
+      line-height: 1.6;
+      position: relative;
+      border: 1px solid #26211f;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+      font-weight: 400;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.1);
+      color: #888;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all .2s;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255,255,255,.15);
+      color: #ccc;
+    }
+
+    /* ===== Table ===== */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 16px 0;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead {
+      background: var(--bg);
+    }
+
+    th {
+      text-align: left;
+      padding: 12px 16px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text-secondary);
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    tr:hover td { background: rgba(0,45,49,.015); }
+
+    /* ===== Steps ===== */
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      margin-left: 0;
+      padding-left: 0;
+    }
+
+    .steps li {
+      counter-increment: step;
+      position: relative;
+      padding-left: 42px;
+      margin-bottom: 14px;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 1px;
+      width: 26px;
+      height: 26px;
+      background: var(--accent-light);
+      color: var(--accent);
+      border-radius: 50%;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ===== SHA Block ===== */
+    .sha-block {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      word-break: break-all;
+      color: var(--text-secondary);
+      margin: 10px 0 16px;
+    }
+
+    /* ===== Chip / Badge ===== */
+    .chip {
+      display: inline-block;
+      background: var(--bg-code);
+      color: var(--text-secondary);
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      margin: 2px 3px 2px 0;
+      border: 1px solid var(--border);
+    }
+
+    .badge-yes {
+      background: var(--sage-light);
+      color: var(--sage);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .badge-no {
+      background: var(--accent-light);
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* ===== Expandable / Accordion ===== */
+    details {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 16px 0;
+      overflow: hidden;
+      background: var(--bg-card);
+    }
+
+    details summary {
+      padding: 14px 18px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      background: var(--bg);
+      color: var(--text);
+      transition: all .2s;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    details summary::-webkit-details-marker { display: none; }
+
+    details summary::before {
+      content: '▸';
+      font-size: 12px;
+      color: var(--accent);
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+
+    details[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    details summary:hover {
+      background: var(--border-light);
+    }
+
+    details .details-body {
+      padding: 18px;
+      border-top: 1px solid var(--border-light);
+    }
+
+    /* ===== Provider name in table ===== */
+    td strong {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--text);
+    }
+
+    /* ===== Back to top ===== */
+    .back-to-top {
+      position: fixed;
+      bottom: 24px;
+      right: 84px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      box-shadow: var(--shadow-sm);
+      transition: all .2s;
+      z-index: 50;
+    }
+
+    .back-to-top:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .back-to-top.visible { display: flex; }
+
+    /* ===== Footer ===== */
+    .footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .footer a:hover { text-decoration: underline; }
+
+    .footer .footer-brand {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .footer .footer-brand .r { color: var(--accent); }
+    .footer .footer-brand .g { color: var(--sage); }
+
+    /* ===== Links ===== */
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    strong { color: var(--text); font-weight: 600; }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 900px) {
+      .sidebar {
+        transform: translateX(-100%);
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .sidebar-overlay.open {
+        display: block;
+      }
+
+      .main-content {
+        margin-left: 0;
+      }
+
+      .content-wrapper {
+        padding: 32px 20px 80px;
+      }
+
+      .menu-toggle {
+        display: flex;
+      }
+
+      .back-to-top {
+        right: 24px;
+        bottom: 80px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 1.5rem; }
+      .content-wrapper { padding: 24px 16px 80px; }
+      table { font-size: 12px; }
+      th, td { padding: 8px 10px; }
+    }
+
+    /* ===== Print ===== */
+    @media print {
+      .sidebar, .menu-toggle, .back-to-top, .copy-btn { display: none !important; }
+      .main-content { margin-left: 0; }
+      .content-wrapper { max-width: 100%; padding: 0; }
+      pre { white-space: pre-wrap; border-color: #ccc; background: #f5f5f5; color: #333; }
+      code { color: #333; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar TOC -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="brand-text">MeetNote AI</div>
+        <span class="brand-sub">User Guide</span>
+      </div>
+    </div>
+    <div class="toc-label">Mục lục</div>
+    <ul class="toc-list" id="toc-list">
+      <li><a href="#sec-1"><span class="toc-num">01</span> MeetNote AI làm được gì?</a></li>
+      <li><a href="#sec-2"><span class="toc-num">02</span> Cài trên Windows</a></li>
+      <li><a href="#sec-3"><span class="toc-num">03</span> Cài trên macOS</a></li>
+      <li><a href="#sec-4"><span class="toc-num">04</span> Thiết lập speech-to-text</a></li>
+      <li><a href="#sec-5"><span class="toc-num">05</span> Kết nối Codex</a></li>
+      <li><a href="#sec-6"><span class="toc-num">06</span> Ghi cuộc họp mới</a></li>
+      <li><a href="#sec-7"><span class="toc-num">07</span> Upload file ghi âm</a></li>
+      <li><a href="#sec-8"><span class="toc-num">08</span> Xem biên bản</a></li>
+      <li><a href="#sec-9"><span class="toc-num">09</span> Backup &amp; quyền riêng tư</a></li>
+      <li><a href="#sec-10"><span class="toc-num">10</span> Thoát và mở lại</a></li>
+      <li><a href="#sec-11"><span class="toc-num">11</span> Xử lý lỗi</a></li>
+      <li><a href="#sec-12"><span class="toc-num">12</span> Cập nhật phiên bản</a></li>
+    </ul>
+  </nav>
+
+  <!-- Mobile overlay -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <!-- Main -->
+  <main class="main-content">
+    <div class="content-wrapper">
+
+      <!-- Hero -->
+      <header class="hero">
+        <div class="version-badge"><span class="dot"></span> MeetNote AI v1.1.1</div>
+        <h1><span class="highlight">MeetNote&nbsp;AI</span> — Hướng dẫn cài đặt và sử&nbsp;dụng</h1>
+        <p class="subtitle">Áp dụng cho Windows 10/11 x64 và macOS 13+ (Apple&nbsp;Silicon).</p>
+      </header>
+
+      <!-- Section 1 -->
+      <section class="section" id="sec-1">
+        <h2><span class="sec-num">01</span> MeetNote AI làm được gì?</h2>
+        <p>MeetNote AI hỗ&nbsp;trợ:</p>
+        <ul>
+          <li>Ghi âm microphone và âm thanh từ cuộc họp trực&nbsp;tuyến.</li>
+          <li>Chuyển giọng nói thành văn bản theo thời gian&nbsp;thực.</li>
+          <li>Tải file ghi âm có sẵn để tạo&nbsp;transcript.</li>
+          <li>Dịch trực tiếp nội dung cuộc họp khi dùng&nbsp;Soniox.</li>
+          <li>Tạo tóm tắt, quyết định và action items bằng Codex, DeepSeek hoặc&nbsp;Gemini.</li>
+          <li>Sửa transcript, ghi chú, tìm kiếm và xuất từng cuộc họp ra&nbsp;Markdown.</li>
+          <li>Sao lưu và khôi phục dữ liệu bằng file&nbsp;JSON.</li>
+        </ul>
+        <div class="callout warning">
+          ⚠️ MeetNote chạy trên máy của bạn, nhưng tính năng nhận dạng giọng nói và AI sẽ gửi audio hoặc transcript tới nhà cung cấp đã&nbsp;chọn.
+        </div>
+      </section>
+
+      <!-- Section 2 -->
+      <section class="section" id="sec-2">
+        <h2><span class="sec-num">02</span> Cài và mở MeetNote trên&nbsp;Windows</h2>
+
+        <h3>Yêu cầu</h3>
+        <ul>
+          <li>Windows 10 hoặc Windows 11 bản&nbsp;64-bit.</li>
+          <li>Kết nối Internet cho speech-to-text và&nbsp;AI.</li>
+          <li>Microsoft Edge hoặc Google Chrome phiên bản&nbsp;mới.</li>
+          <li>Quyền sử dụng microphone nếu muốn ghi âm trực&nbsp;tiếp.</li>
+        </ul>
+
+        <h3>Cách mở</h3>
+        <ol class="steps">
+          <li>Tải file <code>MeetNote-1.1.1-windows-x64.exe</code> về&nbsp;máy.</li>
+          <li>Nên để file trong một thư mục cố định, ví dụ <code>Documents\MeetNote</code>.</li>
+          <li>Nhấp đúp vào file&nbsp;EXE.</li>
+          <li>Lần đầu chạy, MeetNote giải nén runtime cục bộ rồi tự mở trình duyệt tại:
+            <pre><code>http://127.0.0.1:8765</code></pre>
+          </li>
+          <li>Nếu trình duyệt không tự mở, hãy nhập địa chỉ trên vào Edge hoặc&nbsp;Chrome.</li>
+        </ol>
+        <p>MeetNote là bản portable, không cần cài Node.js và không cần chạy bộ cài&nbsp;riêng.</p>
+
+        <details>
+          <summary>Nếu Windows SmartScreen cảnh&nbsp;báo</summary>
+          <div class="details-body">
+            <p>Bản v1.1.1 hiện chưa có chữ ký code-signing nên Windows có thể hiện cảnh báo. Chỉ tiếp tục nếu file được nhận từ nguồn tin&nbsp;cậy:</p>
+            <ol class="steps">
+              <li>Chọn <strong>More info</strong>.</li>
+              <li>Kiểm tra đúng tên&nbsp;file.</li>
+              <li>Chọn <strong>Run anyway</strong>.</li>
+            </ol>
+            <p>SHA-256 của bản phát hành hiện&nbsp;tại:</p>
+            <div class="sha-block">3f0deee06faf9dd2e71dfabf32d637ff55633fd332af3fb74d3729242f4da62d</div>
+            <p>Kiểm tra bằng PowerShell:</p>
+            <pre><code>Get-FileHash .\MeetNote-1.1.1-windows-x64.exe -Algorithm SHA256</code></pre>
+          </div>
+        </details>
+      </section>
+
+      <!-- Section 3 -->
+      <section class="section" id="sec-3">
+        <h2><span class="sec-num">03</span> Cài MeetNote bằng DMG trên&nbsp;macOS</h2>
+
+        <h3>Yêu cầu</h3>
+        <ul>
+          <li>macOS 13 Ventura trở&nbsp;lên.</li>
+          <li>Máy Mac Apple Silicon: M1, M2, M3, M4 hoặc mới&nbsp;hơn.</li>
+          <li>Safari, Google Chrome hoặc Microsoft Edge phiên bản&nbsp;mới.</li>
+          <li>Kết nối Internet và quyền microphone nếu muốn ghi âm trực&nbsp;tiếp.</li>
+        </ul>
+
+        <h3>Cách cài</h3>
+        <ol class="steps">
+          <li>Tải file <code>MeetNote-1.1.1-arm64.dmg</code> về&nbsp;máy.</li>
+          <li>Nhấp đúp vào file DMG để&nbsp;mở.</li>
+          <li>Kéo <strong>MeetNote.app</strong> vào thư mục <strong>Applications</strong> trong cửa sổ cài&nbsp;đặt.</li>
+          <li>Eject ổ đĩa <strong>MeetNote</strong> sau khi sao chép&nbsp;xong.</li>
+          <li>Mở <strong>Applications</strong>, tìm MeetNote rồi nhấp đúp để&nbsp;chạy.</li>
+          <li>MeetNote tự khởi động local server và mở trình duyệt tại:
+            <pre><code>http://127.0.0.1:8765</code></pre>
+          </li>
+        </ol>
+        <p>Bản macOS đã kèm Node.js runtime, không cần cài Node.js&nbsp;riêng.</p>
+
+        <p>SHA-256 của DMG hiện&nbsp;tại:</p>
+        <div class="sha-block">2f9b6ba021e63bc8af47e479527a512aba0f49eb4ae6d11c30994b74f117bf77</div>
+        <p>Kiểm tra bằng Terminal:</p>
+        <pre><code>shasum -a 256 ~/Downloads/MeetNote-1.1.1-arm64.dmg</code></pre>
+
+        <details>
+          <summary>Nếu macOS chặn app vì chưa xác minh nhà phát&nbsp;triển</summary>
+          <div class="details-body">
+            <p>Bản v1.1.1 hiện được ký ad-hoc, chưa notarize bằng Apple Developer ID. Chỉ mở app nếu DMG đến từ nguồn tin cậy và checksum&nbsp;khớp:</p>
+            <ol class="steps">
+              <li>Thử mở MeetNote một lần để macOS ghi nhận cảnh&nbsp;báo.</li>
+              <li>Mở <strong>System Settings → Privacy &amp;&nbsp;Security</strong>.</li>
+              <li>Cuộn xuống phần Security và chọn <strong>Open Anyway</strong> cạnh&nbsp;MeetNote.</li>
+              <li>Xác nhận <strong>Open</strong> và nhập mật khẩu/Touch ID nếu được&nbsp;hỏi.</li>
+            </ol>
+            <p>Cũng có thể Control-click vào <strong>MeetNote.app</strong> trong Applications, chọn <strong>Open</strong>, rồi xác nhận <strong>Open</strong> nếu tùy chọn này xuất&nbsp;hiện. Không cần tắt Gatekeeper toàn hệ&nbsp;thống.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Cấp quyền trên&nbsp;macOS</summary>
+          <div class="details-body">
+            <ul>
+              <li>Khi trình duyệt hỏi microphone, chọn <strong>Allow</strong>.</li>
+              <li>Nếu đã từ chối, vào <strong>System Settings → Privacy &amp; Security → Microphone</strong> và bật quyền cho trình duyệt đang&nbsp;dùng.</li>
+              <li>Khi bật <strong>System Audio</strong>, chọn đúng tab/cửa sổ chia sẻ và bật chia sẻ âm thanh nếu trình duyệt cung cấp tùy&nbsp;chọn.</li>
+              <li>Nếu đổi quyền mà app chưa nhận, đóng trình duyệt rồi mở lại&nbsp;MeetNote.</li>
+            </ul>
+          </div>
+        </details>
+      </section>
+
+      <!-- Section 4 -->
+      <section class="section" id="sec-4">
+        <h2><span class="sec-num">04</span> Thiết lập speech-to-text</h2>
+        <p>Mở <strong>Settings → Speech &amp;&nbsp;Translation</strong>.</p>
+        <ol class="steps">
+          <li>Chọn <strong>Default Provider</strong>.</li>
+          <li>Chọn model nếu nhà cung cấp có nhiều&nbsp;model.</li>
+          <li>Nhập API&nbsp;key.</li>
+          <li>Chọn <strong>Save Key</strong>.</li>
+          <li>Chọn <strong>Test Connection</strong> và kiểm tra trạng thái chuyển thành <strong>Ready</strong>.</li>
+          <li>Chọn <strong>Save Settings</strong> ở cuối&nbsp;trang.</li>
+        </ol>
+        <p>API key được bảo vệ bằng Windows DPAPI trên Windows hoặc macOS Keychain trên Mac. Key không nằm trong file backup và không được trả lại cho trình&nbsp;duyệt.</p>
+
+        <h3>Chọn nhà cung cấp nào?</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Ghi âm trực tiếp</th>
+                <th>Upload audio</th>
+                <th>Dịch trực tiếp</th>
+                <th>Lưu ý</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Soniox</strong></td>
+                <td><span class="badge-yes">Có</span></td>
+                <td><span class="badge-yes">Có</span></td>
+                <td><span class="badge-yes">Có</span></td>
+                <td>Khuyến nghị nếu cần transcript đa ngôn ngữ và dịch&nbsp;live.</td>
+              </tr>
+              <tr>
+                <td><strong>Deepgram</strong></td>
+                <td><span class="badge-yes">Có</span></td>
+                <td><span class="badge-yes">Có</span></td>
+                <td><span class="badge-no">Không</span></td>
+                <td>Live cần API key có quyền tạo temporary&nbsp;token.</td>
+              </tr>
+              <tr>
+                <td><strong>OpenAI Whisper</strong></td>
+                <td><span class="badge-no">Không</span></td>
+                <td><span class="badge-yes">Có</span></td>
+                <td><span class="badge-no">Không</span></td>
+                <td>File tối đa 25&nbsp;MB. Live recording sẽ fallback sang&nbsp;Soniox.</td>
+              </tr>
+              <tr>
+                <td><strong>Google STT</strong></td>
+                <td><span class="badge-no">Không</span></td>
+                <td><span class="badge-yes">Có</span></td>
+                <td><span class="badge-no">Không</span></td>
+                <td>File inline khoảng 10&nbsp;MB; hỗ trợ tốt WebM/Opus, MP3, OGG, WAV và&nbsp;FLAC.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout info">
+          💡 Nếu chọn Whisper hoặc Google nhưng vẫn muốn ghi trực tiếp, cần cấu hình thêm Soniox vì app dùng Soniox cho luồng live&nbsp;fallback.
+        </div>
+      </section>
+
+      <!-- Section 5 -->
+      <section class="section" id="sec-5">
+        <h2><span class="sec-num">05</span> Kết nối Codex để tạo&nbsp;summary</h2>
+        <p>MeetNote không nhúng Codex CLI riêng. Bạn cần cài Codex CLI một lần rồi đăng nhập bằng tài khoản ChatGPT. Nếu Mac đã cài ứng dụng ChatGPT trong <code>/Applications</code>, MeetNote cũng có thể dùng Codex đi kèm ứng dụng&nbsp;đó.</p>
+
+        <details>
+          <summary>Bước 1 — Cài Codex CLI trên&nbsp;Windows</summary>
+          <div class="details-body">
+            <p>Mở <strong>PowerShell</strong> và chạy lệnh cài chính&nbsp;thức:</p>
+            <pre><code>powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"</code></pre>
+            <p>Sau khi cài xong, đóng PowerShell và mở lại một cửa sổ PowerShell&nbsp;mới.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Bước 1 — Cài Codex CLI trên&nbsp;macOS</summary>
+          <div class="details-body">
+            <p>Mở <strong>Terminal</strong> và chạy lệnh cài chính&nbsp;thức:</p>
+            <pre><code>curl -fsSL https://chatgpt.com/codex/install.sh | sh</code></pre>
+            <p>Sau khi cài xong, đóng Terminal và mở lại. Nếu đã cài ChatGPT trong <code>/Applications</code>, có thể thử kết nối trong MeetNote trước; chỉ cài CLI riêng khi app chưa nhận&nbsp;Codex.</p>
+          </div>
+        </details>
+
+        <h3>Bước 2 — Đăng nhập ChatGPT</h3>
+        <p>Chạy:</p>
+        <pre><code>codex login</code></pre>
+        <p>Hoặc chạy <code>codex</code> và chọn <strong>Sign in with ChatGPT</strong> trong lần mở đầu tiên. Trình duyệt sẽ mở để bạn xác nhận tài&nbsp;khoản.</p>
+        <p>Kiểm tra trạng&nbsp;thái:</p>
+        <pre><code>codex login status</code></pre>
+
+        <h3>Bước 3 — Kết nối trong MeetNote</h3>
+        <ol class="steps">
+          <li>Nếu MeetNote đang chạy từ trước khi cài Codex, hãy thoát hoàn toàn rồi mở lại để app nhận PATH&nbsp;mới:
+            <ul>
+              <li><strong>Windows:</strong> vào <strong>Task Manager</strong>, chọn tiến trình MeetNote và <strong>End task</strong>, sau đó mở lại&nbsp;EXE.</li>
+              <li><strong>macOS:</strong> chọn menu <strong>MeetNote → Thoát MeetNote</strong> hoặc nhấn <code>Command-Q</code>, sau đó mở lại từ&nbsp;Applications.</li>
+            </ul>
+          </li>
+          <li>Mở <strong>Settings → Meeting Notes&nbsp;AI</strong>.</li>
+          <li>Chọn <strong>Codex (ChatGPT)</strong>.</li>
+          <li>Chọn <strong>Connect / Check Codex</strong>.</li>
+          <li>Khi badge hiện <strong>Ready</strong>, chọn <strong>Save Settings</strong>.</li>
+        </ol>
+        <p>Codex dùng phiên đăng nhập ChatGPT đã lưu trên máy. Bạn không cần nhập OpenAI Platform API key vào MeetNote khi dùng provider&nbsp;này.</p>
+
+        <div class="callout info">
+          💡 <strong>Không muốn cài Codex CLI?</strong> Có thể chọn <strong>DeepSeek</strong> hoặc <strong>Google Gemini</strong> trong <strong>Meeting Notes AI</strong>, nhập API key tương ứng, chọn <strong>Save Key</strong>, rồi <strong>Test Connection</strong>.
+        </div>
+      </section>
+
+      <!-- Section 6 -->
+      <section class="section" id="sec-6">
+        <h2><span class="sec-num">06</span> Ghi một cuộc họp mới</h2>
+
+        <h3>Quick Record</h3>
+        <p>Chọn <strong>Quick Record</strong> để tạo tên cuộc họp theo ngày giờ hiện tại và bắt đầu ghi&nbsp;nhanh.</p>
+
+        <h3>Meeting Setup</h3>
+        <p>Chọn <strong>Meeting Setup</strong> khi muốn cấu hình&nbsp;trước:</p>
+        <ol class="steps">
+          <li>Nhập <strong>Meeting Title</strong>.</li>
+          <li>Nhập người tham gia, cách nhau bằng dấu&nbsp;phẩy.</li>
+          <li>Chọn <strong>Spoken Language</strong>; chọn Auto nếu cuộc họp có nhiều ngôn&nbsp;ngữ.</li>
+          <li>Chọn <strong>Translate To</strong> nếu dùng Soniox và muốn dịch trực&nbsp;tiếp.</li>
+          <li>Bật <strong>System Audio</strong> nếu muốn thu âm thanh từ Zoom, Google Meet hoặc tab trình duyệt&nbsp;khác.</li>
+          <li>Chọn <strong>Start Recording</strong>.</li>
+        </ol>
+
+        <p>Khi trình duyệt hỏi quyền:</p>
+        <ul>
+          <li>Cho phép&nbsp;microphone.</li>
+          <li>Nếu bật System Audio, chọn đúng tab/cửa sổ và nhớ bật <strong>Share audio</strong>.</li>
+          <li>Nên đeo tai nghe để giảm tiếng&nbsp;vọng.</li>
+        </ul>
+        <p>Khi kết thúc, chọn <strong>Stop Recording</strong> và chờ app lưu audio/transcript.</p>
+      </section>
+
+      <!-- Section 7 -->
+      <section class="section" id="sec-7">
+        <h2><span class="sec-num">07</span> Upload file ghi âm có&nbsp;sẵn</h2>
+        <ol class="steps">
+          <li>Từ Dashboard, chọn <strong>Upload Recording</strong>.</li>
+          <li>Chọn file audio/video.</li>
+          <li>MeetNote lưu file cục bộ và xử lý transcript ở&nbsp;background.</li>
+          <li>Có thể tiếp tục dùng app trong lúc&nbsp;chờ.</li>
+        </ol>
+        <p>Định dạng được nhận:</p>
+        <p>
+          <span class="chip">AAC</span>
+          <span class="chip">AIFF</span>
+          <span class="chip">AMR</span>
+          <span class="chip">ASF</span>
+          <span class="chip">FLAC</span>
+          <span class="chip">MP3</span>
+          <span class="chip">OGG</span>
+          <span class="chip">WAV</span>
+          <span class="chip">WebM</span>
+          <span class="chip">M4A</span>
+          <span class="chip">MP4</span>
+        </p>
+        <div class="callout info">
+          💡 Giới hạn thực tế còn phụ thuộc provider. Nếu file quá lớn với Whisper hoặc Google, hãy dùng Soniox/Deepgram hoặc nén/chia nhỏ&nbsp;file.
+        </div>
+      </section>
+
+      <!-- Section 8 -->
+      <section class="section" id="sec-8">
+        <h2><span class="sec-num">08</span> Xem và hoàn thiện biên&nbsp;bản</h2>
+        <p>Mở cuộc họp trong <strong>All Meetings</strong>. Các tab chính&nbsp;gồm:</p>
+        <ul>
+          <li><strong>Transcript</strong> — xem, sửa trực tiếp từng đoạn và copy toàn bộ nội&nbsp;dung.</li>
+          <li><strong>Summary</strong> — chọn ngôn ngữ/provider rồi chọn <strong>Generate Summary</strong>.</li>
+          <li><strong>Translation</strong> — xem bản dịch nếu cuộc họp có bật&nbsp;dịch.</li>
+          <li><strong>Actions</strong> — xem action items AI trích xuất, thêm thủ công, đánh dấu hoàn thành hoặc&nbsp;xóa.</li>
+          <li><strong>Notes</strong> — nhập ghi chú riêng và chọn <strong>Save Notes</strong>.</li>
+        </ul>
+        <p>Nút <strong>Export</strong> ở góc trên xuất cuộc họp hiện tại thành file Markdown. Nút AI cạnh tên cuộc họp có thể đề xuất lại tiêu đề khi đã có&nbsp;transcript.</p>
+      </section>
+
+      <!-- Section 9 -->
+      <section class="section" id="sec-9">
+        <h2><span class="sec-num">09</span> Backup, dữ liệu và quyền riêng&nbsp;tư</h2>
+
+        <h3>Chọn và xóa nhiều cuộc họp</h3>
+        <p>Vào <strong>All Meetings</strong>, đánh dấu từng cuộc họp hoặc dùng <strong>Select all</strong>, sau đó chọn <strong>Delete selected</strong>. Cuộc họp đang ghi hoặc đang xử lý sẽ không thể được chọn cho đến khi tác vụ hoàn tất. Khi xác nhận, app xóa metadata, recording, transcript và summary của các mục đã&nbsp;chọn.</p>
+
+        <h3>Log và bug report</h3>
+        <p>Vào <strong>Settings → Support &amp; Diagnostics</strong>:</p>
+        <ul>
+          <li><strong>View Recent Logs</strong> — xem các sự kiện và lỗi gần đây được lưu cục bộ; log tự xoay vòng để giới hạn dung&nbsp;lượng.</li>
+          <li><strong>Report a Bug</strong> — nhập mô tả rồi chọn <strong>Create &amp; Download Report</strong>. Sau khi file JSON được tải về, hãy gửi file đó cho <strong>Nguyen Leon qua kênh hỗ trợ đã được cung cấp</strong>; app không tự động gửi report qua&nbsp;Internet.</li>
+        </ul>
+        <p>Bug report không chứa recording, transcript, bản dịch, notes, summary, action items, tiêu đề cuộc họp hoặc API key. Một bản report cũng được lưu trong thư mục <code>bug-reports</code> bên trong thư mục dữ liệu MeetNote. <strong>Việc tải file không đồng nghĩa report đã được gửi</strong>; người dùng cần đính kèm file JSON khi liên hệ Nguyen&nbsp;Leon.</p>
+
+        <h3>Backup trong app</h3>
+        <p>Vào <strong>Settings → Data Management</strong>:</p>
+        <ul>
+          <li><strong>Export Backup</strong> — xuất metadata, transcript, summary, notes, action items và settings không chứa&nbsp;secret.</li>
+          <li><strong>Import Backup</strong> — khôi phục từ file JSON đã&nbsp;xuất.</li>
+          <li><strong>Clear All Data</strong> — xóa dữ liệu trong app; cần kiểm tra kỹ trước khi xác&nbsp;nhận.</li>
+        </ul>
+        <p>File JSON backup <strong>không chứa audio</strong> và <strong>không chứa API&nbsp;key</strong>.</p>
+
+        <details>
+          <summary>Thư mục trên Windows</summary>
+          <div class="details-body">
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Nội dung</th><th>Vị trí</th></tr></thead>
+                <tbody>
+                  <tr><td>Dữ liệu cuộc họp và audio</td><td><code>%APPDATA%\MeetNote</code></td></tr>
+                  <tr><td>Runtime được giải nén</td><td><code>%LOCALAPPDATA%\MeetNote\Runtime</code></td></tr>
+                  <tr><td>Log hỗ trợ kỹ thuật</td><td><code>%LOCALAPPDATA%\MeetNote\Logs\server.log</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Muốn backup đầy đủ cả audio, hãy thoát MeetNote rồi sao chép toàn bộ thư mục <code>%APPDATA%\MeetNote</code> sang nơi an&nbsp;toàn.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Thư mục trên macOS</summary>
+          <div class="details-body">
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Nội dung</th><th>Vị trí</th></tr></thead>
+                <tbody>
+                  <tr><td>Dữ liệu cuộc họp và audio</td><td><code>~/Library/Application Support/MeetNote</code></td></tr>
+                  <tr><td>Log hỗ trợ kỹ thuật</td><td><code>~/Library/Logs/MeetNote/server.log</code></td></tr>
+                  <tr><td>Ứng dụng</td><td><code>/Applications/MeetNote.app</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Muốn backup đầy đủ cả audio trên Mac, hãy thoát MeetNote rồi sao chép toàn bộ thư mục <code>~/Library/Application Support/MeetNote</code> sang nơi an toàn. Trong Finder, chọn <strong>Go → Go to Folder…</strong> để dán đường dẫn có ký tự&nbsp;<code>~</code>.</p>
+          </div>
+        </details>
+
+        <h3>Dữ liệu nào đi ra Internet?</h3>
+        <ul>
+          <li>Audio được gửi tới provider speech-to-text đã chọn để tạo&nbsp;transcript.</li>
+          <li>Transcript được gửi tới Codex, DeepSeek hoặc Gemini khi bạn yêu cầu tạo&nbsp;summary/title.</li>
+          <li>Dữ liệu cuộc họp, audio và transcript vẫn được lưu cục bộ trong thư mục MeetNote trên&nbsp;máy.</li>
+        </ul>
+        <div class="callout warning">
+          ⚠️ Không nên dùng dữ liệu nhạy cảm nếu chính sách công ty không cho phép gửi nội dung tới các dịch vụ AI bên&nbsp;ngoài.
+        </div>
+      </section>
+
+      <!-- Section 10 -->
+      <section class="section" id="sec-10">
+        <h2><span class="sec-num">10</span> Thoát và mở lại app</h2>
+        <ul>
+          <li>Đóng tab trình duyệt không nhất thiết dừng local&nbsp;server.</li>
+          <li><strong>Windows:</strong> chạy file EXE thêm lần nữa để mở giao diện; dùng <strong>Task Manager → End task</strong> để dừng hoàn&nbsp;toàn.</li>
+          <li><strong>macOS:</strong> bấm biểu tượng MeetNote trên Dock hoặc chọn <strong>MeetNote → Mở MeetNote</strong> để mở lại giao diện; chọn <strong>MeetNote → Thoát MeetNote</strong> hoặc nhấn <code>Command-Q</code> để dừng hoàn&nbsp;toàn.</li>
+          <li>Khi thoát đúng cách, local server con cũng được&nbsp;dừng.</li>
+        </ul>
+      </section>
+
+      <!-- Section 11 -->
+      <section class="section" id="sec-11">
+        <h2><span class="sec-num">11</span> Xử lý lỗi thường gặp</h2>
+
+        <details>
+          <summary>Không thấy nút Connect Codex</summary>
+          <div class="details-body">
+            <p>Đảm bảo đang dùng đúng bản EXE/DMG có SHA-256 ghi ở mục 2 hoặc 3. Vào <strong>Settings → Meeting Notes AI</strong> và chọn <strong>Codex (ChatGPT)</strong>; nút <strong>Connect / Check Codex</strong> sẽ hiện bên&nbsp;dưới.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary><code>Codex CLI was not found</code></summary>
+          <div class="details-body">
+            <ol class="steps">
+              <li>Mở PowerShell hoặc Terminal mới và chạy <code>codex --version</code>.</li>
+              <li>Nếu lệnh không tồn tại, cài lại Codex&nbsp;CLI.</li>
+              <li>Nếu lệnh chạy được nhưng MeetNote vẫn không thấy, thoát hẳn MeetNote rồi mở&nbsp;lại.</li>
+            </ol>
+          </div>
+        </details>
+
+        <details>
+          <summary>Codex chưa đăng nhập</summary>
+          <div class="details-body">
+            <p>Chạy:</p>
+            <pre><code>codex login
+codex login status</code></pre>
+            <p>Sau đó quay lại Settings và chọn <strong>Connect / Check Codex</strong>.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Microphone hoặc System Audio không hoạt&nbsp;động</summary>
+          <div class="details-body">
+            <ul>
+              <li><strong>Windows:</strong> kiểm tra <strong>Windows Settings → Privacy &amp; security → Microphone</strong>.</li>
+              <li><strong>macOS:</strong> kiểm tra <strong>System Settings → Privacy &amp; Security → Microphone</strong>.</li>
+              <li>Cho phép microphone cho trình duyệt đang&nbsp;dùng.</li>
+              <li>Dùng Edge/Chrome bản&nbsp;mới.</li>
+              <li>Với System Audio, chọn tab/cửa sổ đúng và bật <strong>Share audio</strong>.</li>
+              <li>Một số ứng dụng/cửa sổ không cho trình duyệt capture audio; thử chia sẻ tab trình duyệt thay vì toàn màn&nbsp;hình.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details>
+          <summary>API key báo lỗi</summary>
+          <div class="details-body">
+            <ul>
+              <li>Kiểm tra key chưa hết hạn và đúng&nbsp;provider.</li>
+              <li>Chọn <strong>Save Key</strong> trước, sau đó <strong>Test Connection</strong>.</li>
+              <li>Với Deepgram live, key cần quyền tạo temporary&nbsp;token.</li>
+              <li>Kiểm tra mạng, firewall hoặc VPN có chặn dịch vụ hay&nbsp;không.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details>
+          <summary>App không mở</summary>
+          <div class="details-body">
+            <ol class="steps">
+              <li>Thử mở <code>http://127.0.0.1:8765</code> trong trình&nbsp;duyệt.</li>
+              <li><strong>Windows:</strong> kiểm tra Task Manager, dừng tiến trình MeetNote rồi mở lại&nbsp;EXE.</li>
+              <li><strong>macOS:</strong> thoát MeetNote bằng <code>Command-Q</code> rồi mở lại từ&nbsp;Applications.</li>
+              <li>Xem log tại <code>%LOCALAPPDATA%\MeetNote\Logs\server.log</code> trên Windows hoặc <code>~/Library/Logs/MeetNote/server.log</code> trên&nbsp;Mac.</li>
+              <li>Không gửi log công khai nếu trong đó có nội dung cuộc họp hoặc thông tin nhạy&nbsp;cảm.</li>
+            </ol>
+          </div>
+        </details>
+      </section>
+
+      <!-- Section 12 -->
+      <section class="section" id="sec-12">
+        <h2><span class="sec-num">12</span> Cập nhật phiên bản mới</h2>
+        <ol class="steps">
+          <li>Backup dữ liệu trước khi cập&nbsp;nhật.</li>
+          <li>Tải EXE/DMG mới từ nguồn phát hành tin&nbsp;cậy.</li>
+          <li>Thoát hoàn toàn bản đang&nbsp;chạy.</li>
+          <li><strong>Windows:</strong> mở EXE mới; dữ liệu trong <code>%APPDATA%\MeetNote</code> được giữ&nbsp;lại.</li>
+          <li><strong>macOS:</strong> mở DMG mới và kéo MeetNote.app vào Applications, chọn <strong>Replace</strong> khi được hỏi; dữ liệu trong <code>~/Library/Application Support/MeetNote</code> được giữ&nbsp;lại.</li>
+        </ol>
+      </section>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <div class="footer-brand">its<span class="r">nguyen</span><span class="g">leon</span></div>
+        <p>Tài liệu Codex CLI: <a href="https://learn.chatgpt.com/docs/codex/cli" target="_blank" rel="noopener">learn.chatgpt.com/docs/codex/cli</a></p>
+        <p style="margin-top:6px;">© 2026 MeetNote AI v1.1.1</p>
+      </footer>
+
+    </div>
+  </main>
+
+  <!-- Mobile menu button -->
+  <button class="menu-toggle" id="menu-toggle" aria-label="Mở mục lục">☰</button>
+
+  <!-- Back to top -->
+  <button class="back-to-top" id="back-to-top" aria-label="Lên đầu trang">↑</button>
+
+  <script>
+    // --- Mobile sidebar toggle ---
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const menuBtn = document.getElementById('menu-toggle');
+
+    function openSidebar() {
+      sidebar.classList.add('open');
+      overlay.classList.add('open');
+      menuBtn.textContent = '✕';
+    }
+
+    function closeSidebar() {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+      menuBtn.textContent = '☰';
+    }
+
+    menuBtn.addEventListener('click', () => {
+      sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    });
+
+    overlay.addEventListener('click', closeSidebar);
+
+    // Close sidebar on link click (mobile)
+    document.querySelectorAll('.toc-list a').forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth <= 900) closeSidebar();
+      });
+    });
+
+    // --- Active TOC highlight ---
+    const sections = document.querySelectorAll('.section');
+    const tocLinks = document.querySelectorAll('.toc-list a');
+
+    function updateActiveToc() {
+      let current = '';
+      sections.forEach(sec => {
+        const top = sec.getBoundingClientRect().top;
+        if (top <= 80) current = sec.id;
+      });
+      tocLinks.forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+      });
+    }
+
+    window.addEventListener('scroll', updateActiveToc, { passive: true });
+    updateActiveToc();
+
+    // --- Back to top ---
+    const backBtn = document.getElementById('back-to-top');
+
+    window.addEventListener('scroll', () => {
+      backBtn.classList.toggle('visible', window.scrollY > 400);
+    }, { passive: true });
+
+    backBtn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // --- Copy buttons for code blocks ---
+    document.querySelectorAll('pre').forEach(pre => {
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', () => {
+        const code = pre.querySelector('code');
+        navigator.clipboard.writeText(code.textContent).then(() => {
+          btn.textContent = '✓ Copied';
+          setTimeout(() => btn.textContent = 'Copy', 1500);
+        });
+      });
+      pre.style.position = 'relative';
+      pre.appendChild(btn);
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "meetnote-local",
+  "version": "1.1.1",
+  "private": true,
+  "description": "Local-first AI meeting notes app with file-based storage",
+  "license": "MIT",
+  "homepage": "https://github.com/nguyenleon158/meeting-notes#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nguyenleon158/meeting-notes.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nguyenleon158/meeting-notes/issues"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
