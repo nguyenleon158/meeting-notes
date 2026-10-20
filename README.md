@@ -104,4 +104,8 @@ meeting data. For security issues, follow [SECURITY.md](SECURITY.md).
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening
 a pull request.
 
+## License
+
+MeetNote is available under the [MIT License](LICENSE).
+
 Built by [Nguyen Leon](https://nguyenleon.com).
