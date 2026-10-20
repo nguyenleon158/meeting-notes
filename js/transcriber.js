@@ -275,7 +275,12 @@ const SonioxTranscriber = {
     buffer.endMs = endMs;
 
     const hasSentenceBoundary = /[.!?。！？]\s*$/.test(buffer.text);
-    const reachedMaxDuration = buffer.startMs > 0 && buffer.endMs - buffer.startMs >= 20_000;
+    // Commit a segment at least every 6s of continuous speech. Speakers without
+    // clear sentence pauses (e.g. a fast foreign client) otherwise only surface
+    // on screen in one lump when the cap is hit, making the live transcript feel
+    // laggy. A shorter cap keeps committed text flowing while the growing buffer
+    // still shows as a live interim line between commits.
+    const reachedMaxDuration = buffer.startMs > 0 && buffer.endMs - buffer.startMs >= 6_000;
     if (hasSentenceBoundary || reachedMaxDuration) this._flush(channel);
   },
 
