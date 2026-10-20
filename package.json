@@ -1,0 +1,13 @@
+{
+  "name": "meetnote-local",
+  "version": "1.1.1",
+  "private": true,
+  "description": "Local-first AI meeting notes app with file-based storage",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

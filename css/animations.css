@@ -1,0 +1,166 @@
+/* ============================================
+   MeetNote AI — Animations
+   ============================================ */
+
+/* ── Page Transitions ── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ── Recording Pulse ── */
+@keyframes record-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 24px 8px rgba(239, 68, 68, 0.2); }
+}
+
+@keyframes record-ring {
+  0%, 100% { inset: -4px; opacity: 0.3; }
+  50% { inset: -12px; opacity: 0.1; }
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ── Waveform ── */
+@keyframes waveform-bounce {
+  0%, 100% { height: 6px; }
+  50% { height: 32px; }
+}
+
+.waveform-bar.animating:nth-child(1) { animation: waveform-bounce 0.8s ease-in-out infinite 0s; }
+.waveform-bar.animating:nth-child(2) { animation: waveform-bounce 0.8s ease-in-out infinite 0.1s; }
+.waveform-bar.animating:nth-child(3) { animation: waveform-bounce 0.8s ease-in-out infinite 0.2s; }
+.waveform-bar.animating:nth-child(4) { animation: waveform-bounce 0.8s ease-in-out infinite 0.15s; }
+.waveform-bar.animating:nth-child(5) { animation: waveform-bounce 0.8s ease-in-out infinite 0.3s; }
+.waveform-bar.animating:nth-child(6) { animation: waveform-bounce 0.8s ease-in-out infinite 0.05s; }
+.waveform-bar.animating:nth-child(7) { animation: waveform-bounce 0.8s ease-in-out infinite 0.25s; }
+.waveform-bar.animating:nth-child(8) { animation: waveform-bounce 0.8s ease-in-out infinite 0.12s; }
+.waveform-bar.animating:nth-child(9) { animation: waveform-bounce 0.8s ease-in-out infinite 0.08s; }
+.waveform-bar.animating:nth-child(10) { animation: waveform-bounce 0.8s ease-in-out infinite 0.22s; }
+.waveform-bar.animating:nth-child(11) { animation: waveform-bounce 0.8s ease-in-out infinite 0.18s; }
+.waveform-bar.animating:nth-child(12) { animation: waveform-bounce 0.8s ease-in-out infinite 0.28s; }
+.waveform-bar.animating:nth-child(13) { animation: waveform-bounce 0.8s ease-in-out infinite 0.06s; }
+.waveform-bar.animating:nth-child(14) { animation: waveform-bounce 0.8s ease-in-out infinite 0.2s; }
+.waveform-bar.animating:nth-child(15) { animation: waveform-bounce 0.8s ease-in-out infinite 0.14s; }
+.waveform-bar.animating:nth-child(16) { animation: waveform-bounce 0.8s ease-in-out infinite 0.26s; }
+
+/* ── Skeleton Loading ── */
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Toast ── */
+@keyframes toast-slide-in {
+  from { opacity: 0; transform: translateX(100px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-slide-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100px); }
+}
+
+/* ── Spin ── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ── Float ── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* ── Stagger Children ── */
+.stagger-children > * {
+  animation: fade-in var(--duration-slow) var(--ease-out) backwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+.stagger-children > *:nth-child(9) { animation-delay: 400ms; }
+.stagger-children > *:nth-child(10) { animation-delay: 450ms; }
+
+/* ── View Transition ── */
+.view-enter {
+  animation: fade-in var(--duration-normal) var(--ease-out);
+}
+
+.view-exit {
+  animation: fade-out var(--duration-fast) var(--ease-out);
+}
+
+/* ── Ambient Glow (for hero/recording area) ── */
+.ambient-glow {
+  position: relative;
+}
+
+.ambient-glow::after {
+  content: '';
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(220, 20, 60, 0.12) 0%, transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: float 6s ease-in-out infinite;
+}
+
+/* ── Reduced Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
