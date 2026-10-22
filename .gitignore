@@ -30,3 +30,6 @@ storage/*
 *.key
 *.p12
 *.mobileprovision
+
+# Internal planning notes (kept local only)
+docs/
