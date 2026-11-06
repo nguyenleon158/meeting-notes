@@ -18,7 +18,8 @@ const Storage = {
     llmProvider: 'codex',
     llmModels: {},
     sttProvider: 'soniox',
-    sttModels: {}
+    sttModels: {},
+    sttRegions: {}
   },
   _meetings: [],
   _settings: {},

@@ -169,7 +169,7 @@ async function summarizeAudioStorage() {
 function safeSettingsForDiagnostics(settings) {
   const allowed = [
     'language', 'translationLanguage', 'theme', 'uiLanguage', 'autoSave',
-    'showTimestamps', 'llmProvider', 'llmModels', 'sttProvider', 'sttModels'
+    'showTimestamps', 'llmProvider', 'llmModels', 'sttProvider', 'sttModels', 'sttRegions'
   ];
   return Object.fromEntries(allowed.filter(key => settings[key] !== undefined).map(key => [key, settings[key]]));
 }

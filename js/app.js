@@ -655,7 +655,8 @@ const App = {
       soniox: 'Soniox',
       deepgram: 'Deepgram',
       whisper: 'OpenAI Whisper',
-      google: 'Google Speech-to-Text'
+      google: 'Google Speech-to-Text',
+      azure: 'Azure Speech'
     })[id] || id || 'Speech-to-text';
   },
 
@@ -2171,7 +2172,7 @@ const App = {
         <!-- Speech & Translation -->
         <div class="settings-section">
           <h3 style="margin-bottom: var(--space-2);">Speech &amp; Translation</h3>
-          <p class="text-sm text-secondary" style="margin-bottom: var(--space-4);">Secrets stay in the operating system's secure credential storage — macOS Keychain or Windows DPAPI — and are never returned to the browser. The selected provider transcribes <strong>uploaded recordings</strong>, and also <strong>live recording</strong> when it supports streaming (Soniox, Deepgram). Whisper and Google are upload-only; live recording falls back to Soniox.</p>
+          <p class="text-sm text-secondary" style="margin-bottom: var(--space-4);">Secrets stay in the operating system's secure credential storage — macOS Keychain or Windows DPAPI — and are never returned to the browser. The selected provider transcribes <strong>uploaded recordings</strong>, and also <strong>live recording</strong> when it supports streaming (Soniox, Deepgram). Whisper, Google and Azure are upload-only; live recording falls back to Soniox. For Khmer, choose Azure Speech and upload the recording.</p>
 
           <div class="settings-row">
             <div class="settings-row-info">
@@ -2204,6 +2205,13 @@ const App = {
                 <p>Protected by macOS Keychain or Windows DPAPI. Never returned to the browser.</p>
               </div>
               <input type="password" class="input" id="setting-stt-key" placeholder="Enter API key" autocomplete="off" style="width: 280px;">
+            </div>
+            <div class="settings-row" id="stt-region-row" style="display:none;">
+              <div class="settings-row-info">
+                <h4>Region</h4>
+                <p>Region of the Speech resource, shown next to its keys in the Azure portal (e.g. southeastasia)</p>
+              </div>
+              <input type="text" class="input" id="setting-stt-region" placeholder="southeastasia" autocomplete="off" spellcheck="false" style="width: 280px;">
             </div>
             <div class="flex gap-2" style="margin-top: var(--space-2);">
               <button class="btn btn-secondary btn-sm" id="stt-save-key">Save Key</button>
@@ -2369,6 +2377,9 @@ const App = {
         if (!llm) return;
         const stt = resolveSelection('stt', this._PROVIDER_UI.stt);
         if (!stt) return;
+        // Keep a region typed into the visible Azure row without a key re-save.
+        const regionInput = document.getElementById('setting-stt-region');
+        if (regionInput?.value.trim() && !(await this._saveProviderRegion('stt', document.getElementById('setting-stt-provider')?.value))) return;
 
         Storage.saveSettings({
           language: document.getElementById('setting-language').value,
@@ -2568,8 +2579,31 @@ const App = {
     if (statusText) statusText.textContent = provider.message || '';
     if (keyControls) keyControls.style.display = provider.needsKey ? '' : 'none';
     if (keyLabel) keyLabel.textContent = `${provider.name} API Key`;
+    const regionRow = document.getElementById(`${cfg.prefix}-region-row`);
+    const regionInput = document.getElementById(`setting-${cfg.prefix}-region`);
+    if (regionRow) regionRow.style.display = provider.needsRegion ? '' : 'none';
+    if (regionInput && provider.needsRegion) {
+      regionInput.value = (Storage.getSettings()[`${cfg.prefix}Regions`] || {})[provider.id] || '';
+    }
     if (cliSetup) cliSetup.style.display = provider.kind === 'cli' ? '' : 'none';
     if (testButton) testButton.textContent = provider.kind === 'cli' ? 'Connect / Check Codex' : 'Test Connection';
+  },
+
+  // Persist the region input for a provider that needs one. Returns false (and
+  // toasts) when the region is missing or malformed; true otherwise.
+  async _saveProviderRegion(kind, providerId) {
+    const cfg = this._PROVIDER_UI[kind];
+    const provider = (this._providerState?.[kind]?.providers || []).find(p => p.id === providerId);
+    if (!provider?.needsRegion) return true;
+    const region = (document.getElementById(`setting-${cfg.prefix}-region`)?.value || '').trim().toLowerCase();
+    if (!/^[a-z0-9]{2,40}$/.test(region)) {
+      this.toast('Enter the region of the Speech resource, e.g. southeastasia', 'error');
+      return false;
+    }
+    const regionsKey = `${cfg.prefix}Regions`;
+    Storage.saveSettings({ [regionsKey]: { ...(Storage.getSettings()[regionsKey] || {}), [providerId]: region } });
+    await Storage.flush();
+    return true;
   },
 
   _bindProviderControls(kind) {
@@ -2584,6 +2618,9 @@ const App = {
       const apiKey = input?.value.trim();
       if (!apiKey) { this.toast('Enter an API key first', 'error'); return; }
       try {
+        // Providers with a regional host (Azure) need the region saved too
+        // before the key is usable; persist it in the same click.
+        if (!(await this._saveProviderRegion(kind, providerId))) return;
         const response = await fetch(`${cfg.endpoint}/${encodeURIComponent(providerId)}/key`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

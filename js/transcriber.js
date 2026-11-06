@@ -40,13 +40,17 @@ const SonioxTranscriber = {
       { code: 'es-ES', sonioxCode: 'es', name: 'Español' },
       { code: 'pt-BR', sonioxCode: 'pt', name: 'Português' },
       { code: 'th-TH', sonioxCode: 'th', name: 'ไทย' },
-      { code: 'id-ID', sonioxCode: 'id', name: 'Bahasa Indonesia' }
+      { code: 'id-ID', sonioxCode: 'id', name: 'Bahasa Indonesia' },
+      // Neither live backend (Soniox, Deepgram) knows Khmer; it is transcribed
+      // from uploaded recordings by providers that do (Azure, Google, Whisper).
+      { code: 'km-KH', sonioxCode: 'km', name: 'ភាសាខ្មែរ (Khmer)', liveSupported: false }
     ];
   },
 
   getTranslationLanguages() {
     const seen = new Set();
     return this.getSupportedLanguages().filter(language => {
+      if (language.liveSupported === false) return false; // not a Soniox target
       if (seen.has(language.sonioxCode)) return false;
       seen.add(language.sonioxCode);
       return true;
@@ -58,6 +62,15 @@ const SonioxTranscriber = {
       item.code === language || item.sonioxCode === language
     );
     return match?.sonioxCode || String(language || 'vi').split('-')[0].toLowerCase();
+  },
+
+  // Language hint for a live session, or '' (auto-detect) when the language
+  // is unset or one the live backends cannot recognise.
+  toLiveLanguage(language) {
+    if (!language || language === 'auto') return '';
+    const match = this.getSupportedLanguages().find(item => item.code === language || item.sonioxCode === language);
+    if (match?.liveSupported === false) return '';
+    return this.toSonioxLanguage(language);
   },
 
   async start(options = {}) {
@@ -82,8 +95,7 @@ const SonioxTranscriber = {
         throw new Error(keyData.error || 'Could not obtain a Soniox temporary key.');
       }
 
-      const autoDetectLanguage = !options.language || options.language === 'auto';
-      const sourceLanguage = autoDetectLanguage ? '' : this.toSonioxLanguage(options.language);
+      const sourceLanguage = this.toLiveLanguage(options.language);
       const targetLanguage = this.toSonioxLanguage(options.translationLanguage);
       const config = {
         api_key: keyData.apiKey,
@@ -402,8 +414,7 @@ const DeepgramTranscriber = {
 
   // Deepgram accepts 2-letter language codes; reuse the shared language table.
   toDeepgramLanguage(language) {
-    if (!language || language === 'auto') return '';
-    return SonioxTranscriber.toSonioxLanguage(language);
+    return SonioxTranscriber.toLiveLanguage(language);
   },
 
   async start(options = {}) {

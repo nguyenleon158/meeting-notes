@@ -7,7 +7,7 @@ turns transcripts into summaries, decisions, and action items.
 ## Highlights
 
 - Live recording with optional system audio capture
-- Speech-to-text through Soniox, Deepgram, OpenAI Whisper, or Google Speech-to-Text
+- Speech-to-text through Soniox, Deepgram, OpenAI Whisper, Google Speech-to-Text, or Azure Speech (adds Khmer)
 - Live translation with Soniox
 - AI summaries and title suggestions through Codex, DeepSeek, or Google Gemini
 - Local meeting library with search, backup, export, and multi-select deletion

@@ -135,8 +135,11 @@ API key được bảo vệ bằng Windows DPAPI trên Windows hoặc macOS Keyc
 | Deepgram | Có | Có | Không | Live cần API key có quyền tạo temporary token; upload vẫn có thể hoạt động nếu thiếu quyền này. |
 | OpenAI Whisper | Không | Có | Không | File tối đa 25 MB. Live recording sẽ fallback sang Soniox. |
 | Google Speech-to-Text | Không | Có | Không | File inline khoảng 10 MB; hỗ trợ tốt WebM/Opus, MP3, OGG, WAV và FLAC. Live recording sẽ fallback sang Soniox. |
+| Azure Speech | Không | Có | Không | Hỗ trợ tiếng Khmer. Cần cả API key và Region (ví dụ `southeastasia`). File dưới 2 giờ và 250 MB. Live recording sẽ fallback sang Soniox. |
 
-Nếu chọn Whisper hoặc Google nhưng vẫn muốn ghi trực tiếp, cần cấu hình thêm Soniox vì app dùng Soniox cho luồng live fallback.
+Họp bằng tiếng Khmer: chọn Azure Speech, chọn ngôn ngữ Khmer rồi upload file ghi âm. Soniox và Deepgram chưa hỗ trợ Khmer.
+
+Nếu chọn Whisper, Google hoặc Azure nhưng vẫn muốn ghi trực tiếp, cần cấu hình thêm Soniox vì app dùng Soniox cho luồng live fallback.
 
 ## 5. Kết nối Codex để tạo summary
 

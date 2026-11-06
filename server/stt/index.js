@@ -10,6 +10,7 @@ const { createSonioxAdapter } = require('./providers/soniox');
 const { createDeepgramAdapter } = require('./providers/deepgram');
 const { createWhisperAdapter } = require('./providers/whisper');
 const { createGoogleAdapter } = require('./providers/google');
+const { createAzureAdapter } = require('./providers/azure');
 
 const DEFAULT_PROVIDER = 'soniox';
 
@@ -19,7 +20,14 @@ const SECRET_CONFIG = {
   soniox: { account: 'soniox-api-key', envKey: 'SONIOX_API_KEY' },
   deepgram: { account: 'deepgram-api-key', envKey: 'DEEPGRAM_API_KEY' },
   whisper: { account: 'openai-api-key', envKey: 'OPENAI_API_KEY' },
-  google: { account: 'google-api-key', envKey: 'GOOGLE_API_KEY' }
+  google: { account: 'google-api-key', envKey: 'GOOGLE_API_KEY' },
+  azure: { account: 'azure-speech-key', envKey: 'AZURE_SPEECH_KEY' }
+};
+
+// Non-secret region per provider, kept in settings.json (`sttRegions`) with a
+// dev env var override. Only providers whose API host is regional need one.
+const REGION_CONFIG = {
+  azure: { envKey: 'AZURE_SPEECH_REGION' }
 };
 
 /**
@@ -39,13 +47,24 @@ function createSttService(deps) {
     return (await secretStore.read(config.account)) || '';
   };
 
+  const makeGetRegion = providerId => async () => {
+    const config = REGION_CONFIG[providerId];
+    if (!config) return '';
+    const fromEnv = (process.env[config.envKey] || '').trim();
+    if (fromEnv) return fromEnv;
+    const settings = await getSettings().catch(() => ({}));
+    const region = settings?.sttRegions?.[providerId];
+    return typeof region === 'string' ? region.trim() : '';
+  };
+
   const adapters = {
     soniox: createSonioxAdapter({ getKey: makeGetKey('soniox') }),
     deepgram: createDeepgramAdapter({ getKey: makeGetKey('deepgram'), timeoutMs }),
     whisper: createWhisperAdapter({ getKey: makeGetKey('whisper'), timeoutMs }),
-    google: createGoogleAdapter({ getKey: makeGetKey('google'), timeoutMs })
+    google: createGoogleAdapter({ getKey: makeGetKey('google'), timeoutMs }),
+    azure: createAzureAdapter({ getKey: makeGetKey('azure'), getRegion: makeGetRegion('azure'), timeoutMs })
   };
-  const ORDER = ['soniox', 'deepgram', 'whisper', 'google'];
+  const ORDER = ['soniox', 'deepgram', 'whisper', 'google', 'azure'];
 
   // One serial queue per provider so two long transcriptions never overlap.
   const queues = {};
@@ -119,6 +138,7 @@ function createSttService(deps) {
         name: adapter.name,
         kind: adapter.kind,
         needsKey: adapter.needsKey,
+        needsRegion: Boolean(adapter.needsRegion),
         supportsTranslation: Boolean(adapter.supportsTranslation),
         supportsLive: Boolean(adapter.supportsLive),
         configured: Boolean(status.configured),
