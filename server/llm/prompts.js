@@ -18,7 +18,8 @@ const SYSTEM_INSTRUCTION =
 // output-language instruction. Empty/unknown → '' (keep the meeting's language).
 const LANGUAGE_NAMES = {
   vi: 'Vietnamese', en: 'English', ja: 'Japanese', ko: 'Korean', zh: 'Chinese',
-  fr: 'French', de: 'German', es: 'Spanish', pt: 'Portuguese', th: 'Thai', id: 'Indonesian'
+  fr: 'French', de: 'German', es: 'Spanish', pt: 'Portuguese', th: 'Thai', id: 'Indonesian',
+  km: 'Khmer'
 };
 
 function languageName(code) {

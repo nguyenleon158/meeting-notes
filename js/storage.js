@@ -19,7 +19,8 @@ const Storage = {
     llmModels: {},
     sttProvider: 'soniox',
     sttModels: {},
-    sttRegions: {}
+    sttRegions: {},
+    translatorRegion: ''
   },
   _meetings: [],
   _settings: {},
@@ -443,6 +444,7 @@ const Storage = {
       audioBlob: null,
       language: string(meeting.language, this.DEFAULT_SETTINGS.language, 20),
       translationLanguage: string(meeting.translationLanguage, '', 20),
+      translationError: string(meeting.translationError, '', 500),
       createdAt: string(meeting.createdAt, new Date().toISOString(), 64),
       updatedAt: string(meeting.updatedAt, new Date().toISOString(), 64)
     };
@@ -476,12 +478,17 @@ const Storage = {
       llmModels: source.llmModels && typeof source.llmModels === 'object' && !Array.isArray(source.llmModels)
         ? source.llmModels
         : {},
-      sttProvider: ['soniox', 'deepgram', 'whisper', 'google'].includes(source.sttProvider)
+      sttProvider: ['soniox', 'deepgram', 'whisper', 'google', 'azure'].includes(source.sttProvider)
         ? source.sttProvider
         : this.DEFAULT_SETTINGS.sttProvider,
       sttModels: source.sttModels && typeof source.sttModels === 'object' && !Array.isArray(source.sttModels)
         ? source.sttModels
-        : {}
+        : {},
+      // Regions are resource locations, not secrets, so they travel too.
+      sttRegions: source.sttRegions && typeof source.sttRegions === 'object' && !Array.isArray(source.sttRegions)
+        ? source.sttRegions
+        : {},
+      translatorRegion: typeof source.translatorRegion === 'string' ? source.translatorRegion.slice(0, 40) : ''
     };
   },
 

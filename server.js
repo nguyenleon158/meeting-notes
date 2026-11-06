@@ -9,6 +9,7 @@ const { Transform } = require('stream');
 const { spawn } = require('child_process');
 const { createLlmService, DEFAULT_PROVIDER } = require('./server/llm');
 const { createSttService, DEFAULT_PROVIDER: DEFAULT_STT_PROVIDER } = require('./server/stt');
+const { createAzureTranslator, MAX_CHARS_PER_REQUEST: MAX_TRANSLATE_CHARS, MAX_ITEMS_PER_REQUEST: MAX_TRANSLATE_ITEMS } = require('./server/translate/azure-translator');
 
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.PORT) || 8765;
@@ -169,7 +170,7 @@ async function summarizeAudioStorage() {
 function safeSettingsForDiagnostics(settings) {
   const allowed = [
     'language', 'translationLanguage', 'theme', 'uiLanguage', 'autoSave',
-    'showTimestamps', 'llmProvider', 'llmModels', 'sttProvider', 'sttModels', 'sttRegions'
+    'showTimestamps', 'llmProvider', 'llmModels', 'sttProvider', 'sttModels', 'sttRegions', 'translatorRegion'
   ];
   return Object.fromEntries(allowed.filter(key => settings[key] !== undefined).map(key => [key, settings[key]]));
 }
@@ -679,6 +680,41 @@ const stt = createSttService({
   getSettings: () => readJson(SETTINGS_FILE, {})
 });
 
+// Text translation for targets the speech provider cannot translate into
+// (uploads from non-Soniox providers, and live captions such as vi → km).
+// The key lives in the OS credential store; the region in settings.json.
+const TRANSLATOR_KEYCHAIN_ACCOUNT = 'azure-translator-key';
+const translator = createAzureTranslator({
+  timeoutMs: 30_000,
+  getKey: async () => (process.env.AZURE_TRANSLATOR_KEY || '').trim() ||
+    (await readKeychainSecret(TRANSLATOR_KEYCHAIN_ACCOUNT)) || '',
+  getRegion: async () => {
+    const fromEnv = (process.env.AZURE_TRANSLATOR_REGION || '').trim();
+    if (fromEnv) return fromEnv;
+    const settings = await readJson(SETTINGS_FILE, {});
+    return typeof settings?.translatorRegion === 'string' ? settings.translatorRegion : '';
+  }
+});
+
+// Fill in a translation for uploads whose provider returned none. A failure
+// keeps the transcript and is reported on the meeting instead of failing it.
+async function translateTranscriptIfNeeded(result, targetLanguage) {
+  if (!targetLanguage || (result.translations || []).length || !(result.transcript || []).length) {
+    return { translations: result.translations || [], translationError: '' };
+  }
+  try {
+    const texts = result.transcript.map(segment => segment.text);
+    const translated = await translator.translate(texts, targetLanguage);
+    const translations = result.transcript
+      .map((segment, index) => ({ text: translated[index], time: segment.time, speaker: segment.speaker, language: targetLanguage }))
+      .filter(segment => segment.text);
+    return { translations, translationError: '' };
+  } catch (error) {
+    logEvent('warn', 'translation.failed', { provider: 'azure-translator', code: error.llmCode || '', message: error.message });
+    return { translations: [], translationError: error.message || 'Translation failed.' };
+  }
+}
+
 // ── Server-owned transcription job lifecycle ──────────────────────────────────
 // In-memory map of running jobs (meetingId → { jobId, promise }). Used for
 // dedupe within a single process; jobs.json is the source of truth across
@@ -738,9 +774,11 @@ async function runTranscriptionJob(job) {
     const duration = Number(result.duration) || 0;
     const isSoniox = provider === 'soniox';
     const sonioxRate = job.translationLanguage ? 0.16 : 0.10;
+    const { translations, translationError } = await translateTranscriptIfNeeded(result, job.translationLanguage);
     await mergeTranscriptionIntoMeeting(job.meetingId, {
       transcript: Array.isArray(result.transcript) ? result.transcript : [],
-      translations: Array.isArray(result.translations) ? result.translations : [],
+      translations,
+      translationError,
       duration,
       status: 'completed',
       processingError: '',
@@ -1107,6 +1145,50 @@ async function handleApi(request, response, url) {
   if (request.method === 'POST' && sttTestMatch) {
     try {
       sendJson(response, 200, await stt.testConnection(sttTestMatch[1]));
+    } catch (error) {
+      if (error.llmCode) sendLlmError(response, error);
+      else throw error;
+    }
+    return true;
+  }
+
+  // Azure Translator: status, key management, test, and text translation.
+  if (request.method === 'GET' && url.pathname === '/api/translator') {
+    sendJson(response, 200, await translator.getStatus());
+    return true;
+  }
+
+  if (url.pathname === '/api/translator/key' && (request.method === 'PUT' || request.method === 'DELETE')) {
+    if (request.method === 'PUT') {
+      const body = await readJsonRequest(request);
+      const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : '';
+      if (!apiKey || apiKey.length > 4000) {
+        sendError(response, 400, 'Enter a valid API key');
+        return true;
+      }
+      await writeKeychainSecret(TRANSLATOR_KEYCHAIN_ACCOUNT, apiKey);
+    } else {
+      await deleteKeychainSecret(TRANSLATOR_KEYCHAIN_ACCOUNT);
+    }
+    sendJson(response, 200, { success: true });
+    return true;
+  }
+
+  if (request.method === 'POST' && (url.pathname === '/api/translator/test' || url.pathname === '/api/translate')) {
+    try {
+      if (url.pathname === '/api/translator/test') {
+        sendJson(response, 200, await translator.testConnection());
+        return true;
+      }
+      const body = await readJsonRequest(request);
+      const texts = Array.isArray(body?.texts) ? body.texts : null;
+      const to = typeof body?.to === 'string' ? body.to.slice(0, 20) : '';
+      const totalChars = texts ? texts.reduce((sum, text) => sum + (typeof text === 'string' ? text.length : 0), 0) : 0;
+      if (!texts || !to || texts.length > MAX_TRANSLATE_ITEMS || totalChars > MAX_TRANSLATE_CHARS || texts.some(text => typeof text !== 'string')) {
+        sendError(response, 400, `Send up to ${MAX_TRANSLATE_ITEMS} texts (${MAX_TRANSLATE_CHARS} characters) and a target language`);
+        return true;
+      }
+      sendJson(response, 200, { translations: await translator.translate(texts, to) });
     } catch (error) {
       if (error.llmCode) sendLlmError(response, error);
       else throw error;

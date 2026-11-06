@@ -47,10 +47,11 @@ const SonioxTranscriber = {
     ];
   },
 
+  // Translation targets. Languages Soniox cannot translate into (Khmer) are
+  // still offered: the Transcriber facade routes them to Azure Translator.
   getTranslationLanguages() {
     const seen = new Set();
     return this.getSupportedLanguages().filter(language => {
-      if (language.liveSupported === false) return false; // not a Soniox target
       if (seen.has(language.sonioxCode)) return false;
       seen.add(language.sonioxCode);
       return true;
@@ -642,20 +643,69 @@ const Transcriber = {
     return provider === 'deepgram' ? DeepgramTranscriber : SonioxTranscriber;
   },
 
+  // Soniox translates natively into the languages it knows; every other
+  // backend/target pair (Deepgram, or a Khmer target) uses Azure Translator.
+  _needsExternalTranslation(backend, options) {
+    const target = options.translationLanguage || '';
+    if (!target) return false;
+    const source = SonioxTranscriber.toLiveLanguage(options.language);
+    if (source && source === SonioxTranscriber.toSonioxLanguage(target)) return false;
+    return backend !== SonioxTranscriber || !SonioxTranscriber.toLiveLanguage(target);
+  },
+
+  // Translate one finalized original segment and emit it on the translation
+  // channel. Calls are chained so captions keep the speaking order.
+  _queueTranslation(result, target) {
+    this._translationChain = this._translationChain.then(async () => {
+      try {
+        const response = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texts: [result.text], to: target })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error?.message || data.error || 'Translation failed');
+        const text = String(data.translations?.[0] || '').trim();
+        if (text) {
+          this.onResult?.({ channel: 'translation', text, isFinal: true, timestamp: result.timestamp, speaker: result.speaker, language: target });
+        }
+      } catch (error) {
+        // Report once per session; the transcript keeps going without captions.
+        if (!this._translationErrorShown) {
+          this._translationErrorShown = true;
+          this.onError?.({ error: 'translation', message: `Live translation stopped: ${error.message}` });
+        }
+      }
+    });
+  },
+
   async start(options = {}) {
     const backend = this._resolveBackend();
     if (this._active && this._active !== backend) {
       try { await this._active.stop(); } catch { /* ignore */ }
     }
     this._active = backend;
-    backend.onResult = result => this.onResult?.(result);
+    this._translationChain = Promise.resolve();
+    this._translationErrorShown = false;
+    const external = this._needsExternalTranslation(backend, options);
+    const target = options.translationLanguage;
+    backend.onResult = result => {
+      this.onResult?.(result);
+      if (external && result.isFinal && result.channel !== 'translation' && result.text?.trim()) {
+        this._queueTranslation(result, target);
+      }
+    };
     backend.onError = error => this.onError?.(error);
     backend.onStatusChange = status => this.onStatusChange?.(status);
-    return backend.start(options);
+    return backend.start(external ? { ...options, translationLanguage: '' } : options);
   },
 
   sendAudio(chunk) { this._active?.sendAudio(chunk); },
   pause() { this._active?.pause(); },
   resume() { this._active?.resume(); },
-  stop() { return this._active ? this._active.stop() : Promise.resolve(); }
+  // Let in-flight caption translations land before the meeting is saved.
+  async stop() {
+    if (this._active) await this._active.stop();
+    await (this._translationChain || Promise.resolve());
+  }
 };

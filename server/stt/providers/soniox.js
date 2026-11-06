@@ -64,8 +64,13 @@ function buildSegments(tokens, translation = false) {
   return segments;
 }
 
+// App languages Soniox cannot recognise or translate into. They are left to
+// auto-detect here, and translation into them falls back to Azure Translator.
+const UNSUPPORTED_LANGUAGES = new Set(['km']);
+
 function toLangCode(value) {
-  return value && value !== 'auto' ? String(value).split('-')[0].toLowerCase() : '';
+  const code = value && value !== 'auto' ? String(value).split('-')[0].toLowerCase() : '';
+  return UNSUPPORTED_LANGUAGES.has(code) ? '' : code;
 }
 
 /**

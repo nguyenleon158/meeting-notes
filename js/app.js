@@ -1478,6 +1478,9 @@ const App = {
               <div class="flex justify-between items-center" style="margin-bottom: var(--space-4);">
                 <span class="text-sm text-secondary">${(meeting.translations || []).length} translated segments · ${Utils.escapeHtml(meeting.translationLanguage)}</span>
               </div>
+              ${meeting.translationError && !(meeting.translations || []).length ? `
+                <p class="text-sm" style="color: var(--danger, #e5484d); margin-bottom: var(--space-4);">Translation failed: ${Utils.escapeHtml(meeting.translationError)}</p>
+              ` : ''}
               ${translationHtml}
             </div>
           ` : ''}
@@ -2150,7 +2153,7 @@ const App = {
           <div class="settings-row">
             <div class="settings-row-info">
               <h4>Default Translate To</h4>
-              <p>Language used for Soniox live translated captions</p>
+              <p>Language for translated captions (Khmer uses Azure Translator)</p>
             </div>
             <select class="input" id="setting-translation-language" style="width: 200px;">
               <option value="">Off</option>
@@ -2220,6 +2223,36 @@ const App = {
           </div>
           <div class="flex gap-2" style="margin-top: var(--space-3);">
             <button class="btn btn-secondary btn-sm" id="stt-test-key">Test Connection</button>
+          </div>
+
+          <h4 style="margin: var(--space-6) 0 var(--space-2);">Azure Translator</h4>
+          <p class="text-sm text-secondary" style="margin-bottom: var(--space-4);">Translates the transcript when the speech provider cannot: live captions into languages Soniox lacks (for example Vietnamese → Khmer), Deepgram live captions, and uploads from Deepgram, Whisper, Google or Azure Speech.</p>
+
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <h4>Translator status</h4>
+              <p id="translator-status-text">Checking configuration…</p>
+            </div>
+            <span class="badge badge-warning" id="translator-status-badge" style="white-space: nowrap;">Checking</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <h4>Translator API Key</h4>
+              <p>Key of the Translator resource. Protected by macOS Keychain or Windows DPAPI.</p>
+            </div>
+            <input type="password" class="input" id="setting-translator-key" placeholder="Enter API key" autocomplete="off" style="width: 280px;">
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <h4>Translator Region</h4>
+              <p>Location of the Translator resource (e.g. southeastasia). Leave empty for a Global resource.</p>
+            </div>
+            <input type="text" class="input" id="setting-translator-region" placeholder="southeastasia" autocomplete="off" spellcheck="false" style="width: 280px;" value="${Utils.escapeHtml(settings.translatorRegion || '')}">
+          </div>
+          <div class="flex gap-2" style="margin-top: var(--space-2);">
+            <button class="btn btn-secondary btn-sm" id="translator-save-key">Save Key</button>
+            <button class="btn btn-ghost btn-sm" id="translator-remove-key">Remove Key</button>
+            <button class="btn btn-secondary btn-sm" id="translator-test">Test Connection</button>
           </div>
         </div>
 
@@ -2354,6 +2387,7 @@ const App = {
     this._bindProviderControls('stt');
     this._refreshProviders('llm');
     this._bindProviderControls('llm');
+    this._bindTranslatorControls();
 
     // Resolve a provider/model selection, blocking a not-ready default. Returns
     // { provider, models } or null if the chosen provider cannot be the default.
@@ -2380,6 +2414,7 @@ const App = {
         // Keep a region typed into the visible Azure row without a key re-save.
         const regionInput = document.getElementById('setting-stt-region');
         if (regionInput?.value.trim() && !(await this._saveProviderRegion('stt', document.getElementById('setting-stt-provider')?.value))) return;
+        if (!(await this._saveTranslatorRegion())) return;
 
         Storage.saveSettings({
           language: document.getElementById('setting-language').value,
@@ -2587,6 +2622,89 @@ const App = {
     }
     if (cliSetup) cliSetup.style.display = provider.kind === 'cli' ? '' : 'none';
     if (testButton) testButton.textContent = provider.kind === 'cli' ? 'Connect / Check Codex' : 'Test Connection';
+  },
+
+  async _refreshTranslatorStatus() {
+    const text = document.getElementById('translator-status-text');
+    const badge = document.getElementById('translator-status-badge');
+    if (!text || !badge) return;
+    try {
+      const response = await fetch('/api/translator', { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error?.message || data.error || 'Could not load Translator status');
+      const label = data.configured ? this._PROVIDER_STATE_LABEL.ready : this._PROVIDER_STATE_LABEL.setup_required;
+      badge.className = `badge ${label.badge}`;
+      badge.textContent = label.text;
+      text.textContent = data.message || '';
+    } catch (error) {
+      badge.className = 'badge badge-warning';
+      badge.textContent = 'Unavailable';
+      text.textContent = error.message;
+    }
+  },
+
+  // Save the Translator region (blank = Global resource). Returns false when
+  // the typed value is not a region id.
+  async _saveTranslatorRegion() {
+    const region = (document.getElementById('setting-translator-region')?.value || '').trim().toLowerCase();
+    if (region && !/^[a-z0-9]{2,40}$/.test(region)) {
+      this.toast('Enter the Translator region, e.g. southeastasia (or leave it empty for Global)', 'error');
+      return false;
+    }
+    Storage.saveSettings({ translatorRegion: region });
+    await Storage.flush();
+    return true;
+  },
+
+  _bindTranslatorControls() {
+    this._refreshTranslatorStatus();
+    const request = async (url, options, success) => {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error?.message || data.error || 'Request failed');
+      this.toast(data.message || success, 'success');
+    };
+
+    document.getElementById('translator-save-key')?.addEventListener('click', async () => {
+      const input = document.getElementById('setting-translator-key');
+      const apiKey = input?.value.trim();
+      if (!apiKey) { this.toast('Enter an API key first', 'error'); return; }
+      try {
+        if (!(await this._saveTranslatorRegion())) return;
+        await request('/api/translator/key', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey })
+        }, 'Translator key saved');
+        input.value = '';
+      } catch (error) {
+        this.toast(error.message, 'error');
+      }
+      await this._refreshTranslatorStatus();
+    });
+
+    document.getElementById('translator-remove-key')?.addEventListener('click', async () => {
+      try {
+        await request('/api/translator/key', { method: 'DELETE' }, 'Translator key removed');
+      } catch (error) {
+        this.toast(error.message, 'error');
+      }
+      await this._refreshTranslatorStatus();
+    });
+
+    document.getElementById('translator-test')?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        if (!(await this._saveTranslatorRegion())) return;
+        await request('/api/translator/test', { method: 'POST' }, 'Translator connection succeeded');
+      } catch (error) {
+        this.toast(error.message, 'error');
+      } finally {
+        button.disabled = false;
+        await this._refreshTranslatorStatus();
+      }
+    });
   },
 
   // Persist the region input for a provider that needs one. Returns false (and

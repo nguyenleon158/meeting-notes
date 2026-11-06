@@ -139,6 +139,16 @@ API key được bảo vệ bằng Windows DPAPI trên Windows hoặc macOS Keyc
 
 Họp bằng tiếng Khmer: chọn Azure Speech, chọn ngôn ngữ Khmer rồi upload file ghi âm. Soniox và Deepgram chưa hỗ trợ Khmer.
 
+### Dịch bằng Azure Translator (ví dụ nói tiếng Việt, dịch ra tiếng Khmer)
+
+Soniox chỉ dịch được sang các ngôn ngữ nó hỗ trợ. Với ngôn ngữ khác (như Khmer), hoặc khi provider không tự dịch (Deepgram, Whisper, Google, Azure Speech), app dùng **Azure Translator**:
+
+1. Vào **Settings → Speech & Translation → Azure Translator**, dán key của Translator resource và nhập Region (ví dụ `southeastasia`; để trống nếu resource là Global).
+2. Chọn **Save Key** rồi **Test Connection**.
+3. Khi tạo cuộc họp, chọn **Translate To: ភាសាខ្មែរ (Khmer)**. Khi ghi âm trực tiếp, mỗi câu nói xong sẽ được dịch và hiện bên cột bản dịch; khi upload, toàn bộ transcript được dịch sau khi chuyển giọng nói xong.
+
+Gói Free của Translator cho 2 triệu ký tự mỗi tháng. Nếu dịch lỗi (hết hạn mức, sai key), transcript gốc vẫn được giữ và lỗi hiện ở tab Translation.
+
 Nếu chọn Whisper, Google hoặc Azure nhưng vẫn muốn ghi trực tiếp, cần cấu hình thêm Soniox vì app dùng Soniox cho luồng live fallback.
 
 ## 5. Kết nối Codex để tạo summary
