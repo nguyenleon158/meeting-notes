@@ -1130,7 +1130,17 @@ const App = {
         statusEl.innerHTML = '<span class="badge badge-warning">Connecting to Soniox…</span>';
       } else if (status === 'listening') {
         statusEl.innerHTML = `<span class="badge badge-recording">● Recording · ${_activeAudioMode} · Soniox live</span>`;
-      } else if (status === 'error') {
+      } else if (status === 'reconnecting') {
+        // Audio keeps recording to disk; only the live transcript is waiting.
+        this._flushTranscriptSave(meetingId);
+        statusEl.innerHTML = `<span class="badge badge-warning">● Recording audio (${_activeAudioMode}) · transcription reconnecting…</span>`;
+        this.toast('Live transcription disconnected. Audio is still recording — reconnecting…', 'warning');
+      } else if (status === 'reconnected') {
+        statusEl.innerHTML = `<span class="badge badge-recording">● Recording · ${_activeAudioMode} · Soniox live</span>`;
+        this.toast('Live transcription reconnected.', 'success');
+      } else if (status === 'paused') {
+        statusEl.innerHTML = '<span class="badge badge-warning">⏸ Paused</span>';
+      } else if (status === 'error' || (status === 'stopped' && isRecordingActive)) {
         statusEl.innerHTML = `<span class="badge badge-warning">Recording audio (${_activeAudioMode}) · transcription unavailable</span>`;
       }
     };
@@ -1190,7 +1200,9 @@ const App = {
           title: meeting.title,
           participants: meeting.participants,
           language: meeting.language || 'vi-VN',
-          translationLanguage: meeting.translationLanguage || ''
+          translationLanguage: meeting.translationLanguage || '',
+          restartAudioFeed: () => Recorder.restartLiveFeed(),
+          log: (level, event, message, context) => this._logClientEvent(level, event, message, { meetingId, ...context })
         });
 
         if (transcriptionStarted) {

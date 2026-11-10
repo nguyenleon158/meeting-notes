@@ -12,6 +12,7 @@ const SonioxTranscriber = {
   onResult: null,       // callback({ channel, text, isFinal, timestamp, speaker, language })
   onError: null,        // callback({ error, message })
   onStatusChange: null, // callback('connecting' | 'listening' | 'paused' | 'stopped' | 'error')
+  onDrop: null,         // callback({ code, reason }) when an open session closes without stop()
   _state: 'stopped',
   _audioQueue: [],
   _buffers: null,
@@ -19,6 +20,8 @@ const SonioxTranscriber = {
   _stopPromise: null,
   _resolveStop: null,
   _stopRequested: false,
+  _opened: false,
+  _lastError: '',
 
   isSupported() {
     return typeof WebSocket !== 'undefined' &&
@@ -124,7 +127,9 @@ const SonioxTranscriber = {
         socket.binaryType = 'arraybuffer';
 
         socket.onopen = () => {
+          if (this.websocket !== socket) return;
           socket.send(JSON.stringify(config));
+          this._opened = true;
           this._state = 'listening';
           this.isListening = true;
           this._emitStatus('listening');
@@ -135,15 +140,26 @@ const SonioxTranscriber = {
           resolve(true);
         };
 
-        socket.onmessage = event => this._handleMessage(event.data);
+        socket.onmessage = event => {
+          if (this.websocket === socket) this._handleMessage(event.data);
+        };
         socket.onerror = () => {
+          // A socket replaced by a newer session must not touch its state.
+          if (this.websocket !== socket) return;
           if (this._state === 'connecting') resolve(false);
           this._emitError('connection-error', 'The Soniox WebSocket connection failed.');
         };
-        socket.onclose = () => {
+        socket.onclose = event => {
+          if (this.websocket !== socket) return;
           if (this._state === 'connecting') resolve(false);
+          // An open session that closes without stop() was cut off (network
+          // drop, server limit or Soniox error): report it so the facade can
+          // reconnect instead of silently ending live transcription.
+          const dropped = this._opened && !this._stopRequested;
+          const reason = event?.reason || this._lastError;
           this._flushAll();
           this._finishStop();
+          if (dropped) this.onDrop?.({ code: event?.code || 0, reason });
         };
       });
     } catch (error) {
@@ -339,6 +355,8 @@ const SonioxTranscriber = {
     this._stopPromise = null;
     this._resolveStop = null;
     this._stopRequested = false;
+    this._opened = false;
+    this._lastError = '';
     this._stopKeepalive();
   },
 
@@ -378,6 +396,7 @@ const SonioxTranscriber = {
 
   _emitError(error, message) {
     console.error(`Transcriber ${error}:`, message);
+    this._lastError = message;
     this._state = 'error';
     this.isListening = false;
     this.onError?.({ error, message });
@@ -401,11 +420,15 @@ const DeepgramTranscriber = {
   onResult: null,
   onError: null,
   onStatusChange: null,
+  onDrop: null,
   _state: 'stopped',
   _audioQueue: [],
   _keepaliveInterval: null,
   _stopPromise: null,
   _resolveStop: null,
+  _stopRequested: false,
+  _opened: false,
+  _lastError: '',
 
   isSupported() {
     return typeof WebSocket !== 'undefined' &&
@@ -454,22 +477,32 @@ const DeepgramTranscriber = {
         socket.binaryType = 'arraybuffer';
 
         socket.onopen = () => {
+          if (this.websocket !== socket) return;
+          this._opened = true;
           this._state = 'listening';
           this.isListening = true;
           this._emitStatus('listening');
           this._startKeepalive();
           for (const chunk of this._audioQueue) socket.send(chunk);
           this._audioQueue = [];
+          if (this._stopRequested) socket.send(JSON.stringify({ type: 'CloseStream' }));
           resolve(true);
         };
-        socket.onmessage = event => this._handleMessage(event.data);
+        socket.onmessage = event => {
+          if (this.websocket === socket) this._handleMessage(event.data);
+        };
         socket.onerror = () => {
+          if (this.websocket !== socket) return;
           if (this._state === 'connecting') resolve(false);
           this._emitError('connection-error', 'The Deepgram WebSocket connection failed.');
         };
-        socket.onclose = () => {
+        socket.onclose = event => {
+          if (this.websocket !== socket) return;
           if (this._state === 'connecting') resolve(false);
+          const dropped = this._opened && !this._stopRequested;
+          const reason = event?.reason || this._lastError;
           this._finishStop();
+          if (dropped) this.onDrop?.({ code: event?.code || 0, reason });
         };
       });
     } catch (error) {
@@ -510,6 +543,7 @@ const DeepgramTranscriber = {
     if (this._stopPromise) return this._stopPromise;
     if (this._state === 'stopped') return Promise.resolve();
 
+    this._stopRequested = true;
     this._stopPromise = new Promise(resolve => {
       this._resolveStop = resolve;
       const timeout = setTimeout(() => {
@@ -567,6 +601,9 @@ const DeepgramTranscriber = {
     this._audioQueue = [];
     this._stopPromise = null;
     this._resolveStop = null;
+    this._stopRequested = false;
+    this._opened = false;
+    this._lastError = '';
     this._stopKeepalive();
   },
 
@@ -606,6 +643,7 @@ const DeepgramTranscriber = {
 
   _emitError(error, message) {
     console.error(`Deepgram ${error}:`, message);
+    this._lastError = message;
     this._state = 'error';
     this.isListening = false;
     this.onError?.({ error, message });
@@ -627,7 +665,15 @@ const Transcriber = {
   _active: null,
   onResult: null,
   onError: null,
-  onStatusChange: null,
+  onStatusChange: null, // backend statuses plus 'reconnecting' / 'reconnected' after a drop
+  _options: null,
+  _backendOptions: null,
+  _stopping: false,
+  _paused: false,
+  _offsetSeconds: 0,
+  _reconnecting: false,
+  _reconnectAttempt: 0,
+  _reconnectTimer: null,
 
   isSupported() { return SonioxTranscriber.isSupported(); },
   getSupportedLanguages() { return SonioxTranscriber.getSupportedLanguages(); },
@@ -679,32 +725,148 @@ const Transcriber = {
     });
   },
 
+  // Reconnect backoff after a live session drops: 1s, 2s, 4s … capped at 30s,
+  // retried for as long as the recording runs.
+  RECONNECT_BASE_MS: 1_000,
+  RECONNECT_MAX_MS: 30_000,
+
+  /**
+   * Start a live session.
+   * @param {Object} options
+   * @param {() => number} [options.restartAudioFeed] - Starts a fresh audio
+   *   encoder for the live stream (a new socket needs a new container header)
+   *   and returns the recording position, in seconds, where it begins.
+   * @param {(level, event, message, context) => void} [options.log] - Persist a diagnostic event.
+   */
   async start(options = {}) {
     const backend = this._resolveBackend();
     if (this._active && this._active !== backend) {
       try { await this._active.stop(); } catch { /* ignore */ }
     }
+    this._clearReconnect();
     this._active = backend;
+    this._options = options;
+    this._stopping = false;
+    this._paused = false;
+    this._offsetSeconds = 0;
     this._translationChain = Promise.resolve();
     this._translationErrorShown = false;
     const external = this._needsExternalTranslation(backend, options);
     const target = options.translationLanguage;
-    backend.onResult = result => {
+    backend.onResult = rawResult => {
+      // Each reconnected session restarts its clock at 0; shift it onto the
+      // recording timeline so segments keep their real position.
+      const result = this._offsetSeconds
+        ? { ...rawResult, timestamp: (Number(rawResult.timestamp) || 0) + this._offsetSeconds }
+        : rawResult;
       this.onResult?.(result);
       if (external && result.isFinal && result.channel !== 'translation' && result.text?.trim()) {
         this._queueTranslation(result, target);
       }
     };
-    backend.onError = error => this.onError?.(error);
-    backend.onStatusChange = status => this.onStatusChange?.(status);
-    return backend.start(external ? { ...options, translationLanguage: '' } : options);
+    backend.onError = error => {
+      this._log('error', 'live_transcription_error', error.message, { provider: this._providerName(), error: error.error });
+      // Failed attempts while reconnecting show as the reconnecting status, not a toast each.
+      if (!this._reconnecting) this.onError?.(error);
+    };
+    backend.onStatusChange = status => {
+      // While reconnecting, the facade alone reports progress ('reconnecting',
+      // then 'reconnected'); a paused meeting keeps its paused badge.
+      if (this._reconnecting) return;
+      if (status === 'listening' && this._paused) return;
+      this.onStatusChange?.(status);
+    };
+    backend.onDrop = info => this._handleDrop(info);
+    this._backendOptions = external ? { ...options, translationLanguage: '' } : options;
+    return backend.start(this._backendOptions);
+  },
+
+  _handleDrop(info = {}) {
+    if (this._stopping) return;
+    this._log('warn', 'live_transcription_dropped', info.reason || 'Live transcription connection closed', {
+      provider: this._providerName(),
+      code: info.code || 0
+    });
+    this._reconnecting = true;
+    this._reconnectAttempt = 0;
+    this.onStatusChange?.('reconnecting');
+    this._scheduleReconnect();
+  },
+
+  _scheduleReconnect() {
+    if (this._stopping) return;
+    const delay = Math.min(this.RECONNECT_MAX_MS, this.RECONNECT_BASE_MS * 2 ** this._reconnectAttempt);
+    this._reconnectAttempt += 1;
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = null;
+      this._reconnect().catch(error => {
+        this._log('error', 'live_transcription_reconnect_failed', error.message, { provider: this._providerName() });
+        this._scheduleReconnect();
+      });
+    }, delay);
+  },
+
+  async _reconnect() {
+    const backend = this._active;
+    if (this._stopping || !backend) return;
+    // Settle any half-closed session first so start() sets 'connecting'
+    // synchronously and queues the fresh feed's header chunk.
+    if (backend._state !== 'stopped') await backend.stop();
+    if (this._stopping) return;
+
+    const attempt = this._reconnectAttempt;
+    const started = backend.start(this._backendOptions);
+    const offset = this._options?.restartAudioFeed?.();
+    if (Number.isFinite(offset)) this._offsetSeconds = offset;
+    const ok = await started;
+
+    if (this._stopping) {
+      if (ok) await backend.stop();
+      return;
+    }
+    if (!ok) {
+      this._scheduleReconnect();
+      return;
+    }
+    this._reconnecting = false;
+    this._reconnectAttempt = 0;
+    if (this._paused) backend.pause();
+    this._log('info', 'live_transcription_reconnected', 'Live transcription reconnected', {
+      provider: this._providerName(),
+      attempt,
+      offsetSeconds: this._offsetSeconds
+    });
+    this.onStatusChange?.(this._paused ? 'paused' : 'reconnected');
+  },
+
+  _clearReconnect() {
+    if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+    this._reconnectTimer = null;
+    this._reconnecting = false;
+    this._reconnectAttempt = 0;
+  },
+
+  _providerName() {
+    return this._active === DeepgramTranscriber ? 'deepgram' : 'soniox';
+  },
+
+  _log(level, event, message, context = {}) {
+    try { this._options?.log?.(level, event, String(message || ''), context); } catch { /* logging is best effort */ }
   },
 
   sendAudio(chunk) { this._active?.sendAudio(chunk); },
-  pause() { this._active?.pause(); },
-  resume() { this._active?.resume(); },
+  pause() {
+    this._paused = true;
+    this._active?.pause();
+  },
+  resume() {
+    this._paused = false;
+    this._active?.resume();
+  },
   // Let in-flight caption translations land before the meeting is saved.
   async stop() {
+    this._stopping = true;
+    this._clearReconnect();
     if (this._active) await this._active.stop();
     await (this._translationChain || Promise.resolve());
   }

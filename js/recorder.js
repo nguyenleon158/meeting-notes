@@ -28,6 +28,9 @@ const Recorder = {
   onSystemAudioLost: null, // callback() when system audio share is stopped mid-recording
   _stopPromise: null,
   _resolveStop: null,
+  _recordingStream: null,
+  _recordingMimeType: '',
+  _liveRecorder: null, // live-transcription-only encoder, created after a reconnect
 
   /**
    * Check if getDisplayMedia with audio is supported in this browser.
@@ -50,6 +53,7 @@ const Recorder = {
       this._stopPromise = null;
       this._resolveStop = null;
       this.hasSystemAudio = false;
+      this._liveRecorder = null;
 
       // 1. Optionally get the system audio stream FIRST.
       // getDisplayMedia() requires fresh transient user activation. Calling it
@@ -154,10 +158,13 @@ const Recorder = {
         AudioStorage.beginRecording(options.meetingId, recordingMimeType);
       }
 
+      this._recordingStream = recordingStream;
+      this._recordingMimeType = this.mediaRecorder.mimeType || supportedMimeType || '';
       this.mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           if (this._persistAudio) AudioStorage.appendChunk(e.data);
-          if (this.onChunk) this.onChunk(e.data);
+          // After a live reconnect a dedicated encoder feeds transcription.
+          if (this.onChunk && !this._liveRecorder) this.onChunk(e.data);
         }
       };
 
@@ -203,9 +210,43 @@ const Recorder = {
     }
   },
 
+  /**
+   * Start a fresh encoder for live transcription only. A reconnected
+   * transcription socket must receive a stream that begins with its own
+   * container header; the main recorder's later chunks have none. The saved
+   * recording keeps using the main recorder untouched.
+   * @returns {number} Recording position in seconds where the new feed begins.
+   */
+  restartLiveFeed() {
+    if (!this.isRecording || !this._recordingStream) return this.getElapsedMs() / 1000;
+    this._stopLiveRecorder();
+    const recorder = this._recordingMimeType
+      ? new MediaRecorder(this._recordingStream, { mimeType: this._recordingMimeType })
+      : new MediaRecorder(this._recordingStream);
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0 && this._liveRecorder === recorder && this.onChunk) this.onChunk(e.data);
+    };
+    this._liveRecorder = recorder;
+    recorder.start(500);
+    if (this.isPaused) recorder.pause();
+    return this.getElapsedMs() / 1000;
+  },
+
+  _stopLiveRecorder() {
+    const recorder = this._liveRecorder;
+    this._liveRecorder = null;
+    if (!recorder) return;
+    // Detach first: the final chunk of the old feed must not reach the new socket.
+    recorder.ondataavailable = null;
+    if (recorder.state !== 'inactive') {
+      try { recorder.stop(); } catch { /* already stopped */ }
+    }
+  },
+
   pause() {
     if (!this.isRecording || this.isPaused) return;
     this.mediaRecorder.pause();
+    if (this._liveRecorder?.state === 'recording') this._liveRecorder.pause();
     this.isPaused = true;
     this.pauseStart = Date.now();
     this._stopWaveform();
@@ -214,6 +255,7 @@ const Recorder = {
   resume() {
     if (!this.isRecording || !this.isPaused) return;
     this.mediaRecorder.resume();
+    if (this._liveRecorder?.state === 'paused') this._liveRecorder.resume();
     this.isPaused = false;
     if (this.pauseStart) {
       this.pausedDuration += Date.now() - this.pauseStart;
@@ -240,6 +282,13 @@ const Recorder = {
 
     this._stopTimer();
     this._stopWaveform();
+
+    // Stop (not detach) the live feed so its last chunk still reaches the
+    // transcriber. _liveRecorder stays set until the next start(), which keeps
+    // the main recorder's header-less final chunk out of the live socket.
+    if (this._liveRecorder && this._liveRecorder.state !== 'inactive') {
+      try { this._liveRecorder.stop(); } catch { /* already stopped */ }
+    }
 
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
@@ -280,12 +329,18 @@ const Recorder = {
     }
     this._mixDestination = null;
     this._mixedStream = null;
+    this._recordingStream = null;
   },
 
   getElapsedSeconds() {
+    return Math.floor(this.getElapsedMs() / 1000);
+  },
+
+  /** Recorded (unpaused) time in milliseconds. */
+  getElapsedMs() {
     if (!this.startTime) return 0;
     const now = this.isPaused && this.pauseStart ? this.pauseStart : Date.now();
-    return Math.floor((now - this.startTime - this.pausedDuration) / 1000);
+    return Math.max(0, now - this.startTime - this.pausedDuration);
   },
 
   getWaveformData() {
