@@ -73,3 +73,16 @@ test('missing key and exhausted quota become typed errors', async () => {
     );
   });
 });
+
+test('a 401 without a region points at the empty region, not the key', async () => {
+  await withFetch(async () => ({ ok: false, status: 401, json: async () => ({}) }), async () => {
+    await assert.rejects(
+      () => createAzureTranslator({ getKey: async () => 'k', getRegion: async () => '', timeoutMs: 5000 }).translate(['hi'], 'km'),
+      err => err.llmCode === 'STT_AUTH_INVALID' && /Region is empty/.test(err.message)
+    );
+    await assert.rejects(
+      () => createAzureTranslator({ getKey: async () => 'k', getRegion: async () => 'southeastasia', timeoutMs: 5000 }).translate(['hi'], 'km'),
+      err => err.llmCode === 'STT_AUTH_INVALID' && !/Region is empty/.test(err.message)
+    );
+  });
+});

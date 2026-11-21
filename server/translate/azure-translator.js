@@ -91,6 +91,11 @@ function createAzureTranslator(deps) {
       // Translator answers 403 when the free monthly quota is used up.
       throw sttError(STT_ERROR.RATE_LIMITED, 'Azure Translator refused the request (403). The free monthly quota may be used up.', { provider: PROVIDER, statusCode: 403, retryable: false });
     }
+    if (response.status === 401 && !headers['Ocp-Apim-Subscription-Region']) {
+      // A regional resource's valid key is rejected when the region header is
+      // missing, which reads like a bad key; point at the region instead.
+      throw sttError(STT_ERROR.AUTH_INVALID, 'Azure Translator rejected the key. The Translator Region is empty: enter the region shown next to the keys in the Azure portal (for example "southeastasia").', { provider: PROVIDER, statusCode: 401, retryable: false });
+    }
     if (!response.ok) throw await httpErrorFor(response, PROVIDER, body => body?.error?.message);
     const body = await response.json().catch(() => null);
     if (!Array.isArray(body) || body.length !== items.length) {

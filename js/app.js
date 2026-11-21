@@ -2226,7 +2226,7 @@ const App = {
                 <h4>Region</h4>
                 <p>Region of the Speech resource, shown next to its keys in the Azure portal (e.g. southeastasia)</p>
               </div>
-              <input type="text" class="input" id="setting-stt-region" placeholder="southeastasia" autocomplete="off" spellcheck="false" style="width: 280px;">
+              <input type="text" class="input" id="setting-stt-region" placeholder="e.g. southeastasia" autocomplete="off" spellcheck="false" style="width: 280px;">
             </div>
             <div class="flex gap-2" style="margin-top: var(--space-2);">
               <button class="btn btn-secondary btn-sm" id="stt-save-key">Save Key</button>
@@ -2259,7 +2259,7 @@ const App = {
               <h4>Translator Region</h4>
               <p>Location of the Translator resource (e.g. southeastasia). Leave empty for a Global resource.</p>
             </div>
-            <input type="text" class="input" id="setting-translator-region" placeholder="southeastasia" autocomplete="off" spellcheck="false" style="width: 280px;" value="${Utils.escapeHtml(settings.translatorRegion || '')}">
+            <input type="text" class="input" id="setting-translator-region" placeholder="e.g. southeastasia" autocomplete="off" spellcheck="false" style="width: 280px;" value="${Utils.escapeHtml(settings.translatorRegion || '')}">
           </div>
           <div class="flex gap-2" style="margin-top: var(--space-2);">
             <button class="btn btn-secondary btn-sm" id="translator-save-key">Save Key</button>
