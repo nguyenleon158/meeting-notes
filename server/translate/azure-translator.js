@@ -3,11 +3,13 @@
    Translates transcript text into a target language
    for providers that cannot translate themselves, and
    for live captions into languages Soniox lacks (e.g.
-   Vietnamese speech → Khmer text). Translate API v3.
+   Vietnamese speech → Khmer text), and for two-way pairs
+   (Vietnamese ↔ English). Translate API v3.
    ============================================ */
 
 const { STT_ERROR, sttError } = require('../stt/contracts');
 const { fetchWithTimeout, httpErrorFor } = require('../stt/providers/http');
+const { parseTranslationPair, pairTargetFor } = require('./translation-pairs');
 
 const ENDPOINT = 'https://api.cognitive.microsofttranslator.com/translate?api-version=3.0';
 const PROVIDER = 'azure-translator';
@@ -20,6 +22,7 @@ const REGION_PATTERN = /^[a-z0-9]{2,40}$/;
 // App language codes that Translator spells differently.
 const TRANSLATOR_CODES = { zh: 'zh-Hans', 'zh-cn': 'zh-Hans', 'zh-tw': 'zh-Hant' };
 const TARGET_PATTERN = /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/;
+const SOURCE_CODE_PATTERN = /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/i;
 
 function toTranslatorCode(value) {
   const code = String(value || '').trim();
@@ -85,7 +88,8 @@ function createAzureTranslator(deps) {
       headers,
       body: JSON.stringify(items.map(text => ({ Text: text }))),
       timeoutMs,
-      provider: PROVIDER
+      provider: PROVIDER,
+      retryStaleConnection: true
     });
     if (response.status === 403) {
       // Translator answers 403 when the free monthly quota is used up.
@@ -101,7 +105,35 @@ function createAzureTranslator(deps) {
     if (!Array.isArray(body) || body.length !== items.length) {
       throw sttError(STT_ERROR.PROVIDER_UNAVAILABLE, 'Azure Translator returned an unexpected response.', { provider: PROVIDER });
     }
-    return body.map(entry => String(entry?.translations?.[0]?.text || ''));
+    // Without a `from`, Translator reports the language it detected per item.
+    return body.map(entry => ({
+      text: String(entry?.translations?.[0]?.text || ''),
+      detected: String(entry?.detectedLanguage?.language || '').split('-')[0].toLowerCase()
+    }));
+  }
+
+  async function credentials() {
+    const key = (await getKey()) || '';
+    if (!key) throw sttError(STT_ERROR.AUTH_REQUIRED, 'Azure Translator key is not configured. Add it in Settings → Speech & Translation.', { provider: PROVIDER });
+    const rawRegion = String((await getRegion()) || '').trim();
+    const region = normalizeRegion(rawRegion);
+    if (rawRegion && !region) {
+      throw sttError(STT_ERROR.AUTH_REQUIRED, 'Azure Translator region is not valid (for example "southeastasia").', { provider: PROVIDER });
+    }
+    return { key, region };
+  }
+
+  // Translate the non-blank texts at `indexes` into `target`, batched.
+  async function translateAt(auth, texts, indexes, target) {
+    const results = new Map();
+    const pending = indexes
+      .map(index => ({ index, text: typeof texts[index] === 'string' ? texts[index].trim() : '' }))
+      .filter(item => item.text);
+    for (const batch of batchTexts(pending.map(item => item.text))) {
+      const translated = await requestBatch(auth.key, auth.region, batch.items, target);
+      translated.forEach((entry, offset) => results.set(pending[batch.start + offset].index, entry));
+    }
+    return results;
   }
 
   /**
@@ -112,25 +144,48 @@ function createAzureTranslator(deps) {
   async function translate(texts, to) {
     const target = toTranslatorCode(to);
     if (!target) throw sttError(STT_ERROR.MODEL_NOT_SUPPORTED, `Unsupported translation language "${to}".`, { provider: PROVIDER });
-    const key = (await getKey()) || '';
-    if (!key) throw sttError(STT_ERROR.AUTH_REQUIRED, 'Azure Translator key is not configured. Add it in Settings → Speech & Translation.', { provider: PROVIDER });
-    const rawRegion = String((await getRegion()) || '').trim();
-    const region = normalizeRegion(rawRegion);
-    if (rawRegion && !region) {
-      throw sttError(STT_ERROR.AUTH_REQUIRED, 'Azure Translator region is not valid (for example "southeastasia").', { provider: PROVIDER });
-    }
+    const auth = await credentials();
+    const results = await translateAt(auth, texts, texts.map((_, index) => index), target);
+    return texts.map((_, index) => results.get(index)?.text || '');
+  }
 
-    const output = texts.map(() => '');
-    const pending = [];
-    texts.forEach((text, index) => {
-      const clean = typeof text === 'string' ? text.trim() : '';
-      if (clean) pending.push({ index, text: clean });
+  /**
+   * Translate texts under a two-way pair ("pair-vi-en"): text in the primary
+   * language goes to the secondary one, everything else to the primary one.
+   * `sources` holds each text's spoken language; a blank one is detected.
+   * @returns {Promise<{ translations: string[], targets: string[] }>}
+   */
+  async function translatePair(texts, pairCode, sources = []) {
+    const pair = parseTranslationPair(pairCode);
+    if (!pair) throw sttError(STT_ERROR.MODEL_NOT_SUPPORTED, `Unsupported translation pair "${pairCode}".`, { provider: PROVIDER });
+    const auth = await credentials();
+    const translations = texts.map(() => '');
+    const targets = texts.map(() => '');
+    const byTarget = { [pair.primary]: [], [pair.secondary]: [] };
+    const unknown = [];
+    texts.forEach((_, index) => {
+      // Only a language code counts; names such as Whisper's "vietnamese" are detected instead.
+      const source = String(sources[index] || '').trim();
+      if (SOURCE_CODE_PATTERN.test(source)) byTarget[pairTargetFor(pair, source)].push(index);
+      else unknown.push(index);
     });
-    for (const batch of batchTexts(pending.map(item => item.text))) {
-      const translated = await requestBatch(key, region, batch.items, target);
-      translated.forEach((text, offset) => { output[pending[batch.start + offset].index] = text; });
-    }
-    return output;
+
+    const keep = (results, target) => results.forEach((entry, index) => {
+      translations[index] = entry.text;
+      targets[index] = target;
+    });
+    keep(await translateAt(auth, texts, byTarget[pair.secondary], pair.secondary), pair.secondary);
+    keep(await translateAt(auth, texts, byTarget[pair.primary], pair.primary), pair.primary);
+    // Unknown language: translate to the primary one; text that was already in
+    // it comes back unchanged, so it is translated to the secondary one instead.
+    const detected = await translateAt(auth, texts, unknown, pair.primary);
+    const inPrimary = [];
+    detected.forEach((entry, index) => {
+      if (entry.detected === pair.primary) inPrimary.push(index);
+      else keep(new Map([[index, entry]]), pair.primary);
+    });
+    keep(await translateAt(auth, texts, inPrimary, pair.secondary), pair.secondary);
+    return { translations, targets };
   }
 
   async function testConnection() {
@@ -139,7 +194,7 @@ function createAzureTranslator(deps) {
     return { ok: true, message: 'Azure Translator connection succeeded.' };
   }
 
-  return { getStatus, translate, testConnection };
+  return { getStatus, translate, translatePair, testConnection };
 }
 
 module.exports = { createAzureTranslator, toTranslatorCode, normalizeRegion, batchTexts, MAX_CHARS_PER_REQUEST, MAX_ITEMS_PER_REQUEST };

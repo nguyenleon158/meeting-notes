@@ -10,6 +10,8 @@ const { spawn } = require('child_process');
 const { createLlmService, DEFAULT_PROVIDER } = require('./server/llm');
 const { createSttService, DEFAULT_PROVIDER: DEFAULT_STT_PROVIDER } = require('./server/stt');
 const { createAzureTranslator, MAX_CHARS_PER_REQUEST: MAX_TRANSLATE_CHARS, MAX_ITEMS_PER_REQUEST: MAX_TRANSLATE_ITEMS } = require('./server/translate/azure-translator');
+const { parseTranslationPair } = require('./server/translate/translation-pairs');
+const { createCaptionRelay } = require('./server/captions/caption-relay');
 
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.PORT) || 8765;
@@ -100,9 +102,12 @@ async function readJson(filePath, fallback) {
 }
 
 async function atomicWriteJson(filePath, value) {
-  const tempPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  // Write beside the real file: renaming over a symlinked data file would
+  // replace the link with a copy and split the data in two.
+  const targetPath = await fsp.realpath(filePath).catch(() => filePath);
+  const tempPath = `${targetPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
   await fsp.writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-  await fsp.rename(tempPath, filePath);
+  await fsp.rename(tempPath, targetPath);
 }
 
 function sanitizeDiagnosticValue(value, depth = 0) {
@@ -704,9 +709,12 @@ async function translateTranscriptIfNeeded(result, targetLanguage) {
   }
   try {
     const texts = result.transcript.map(segment => segment.text);
-    const translated = await translator.translate(texts, targetLanguage);
+    // A two-way pair picks each segment's target from its spoken language.
+    const { translations: translated, targets } = parseTranslationPair(targetLanguage)
+      ? await translator.translatePair(texts, targetLanguage, result.transcript.map(segment => segment.language || ''))
+      : { translations: await translator.translate(texts, targetLanguage), targets: [] };
     const translations = result.transcript
-      .map((segment, index) => ({ text: translated[index], time: segment.time, speaker: segment.speaker, language: targetLanguage }))
+      .map((segment, index) => ({ text: translated[index], time: segment.time, speaker: segment.speaker, language: targets[index] || targetLanguage }))
       .filter(segment => segment.text);
     return { translations, translationError: '' };
   } catch (error) {
@@ -714,6 +722,9 @@ async function translateTranscriptIfNeeded(result, targetLanguage) {
     return { translations: [], translationError: error.message || 'Translation failed.' };
   }
 }
+
+// Live captions for the caption screen (floating overlay or a browser window).
+const captions = createCaptionRelay();
 
 // ── Server-owned transcription job lifecycle ──────────────────────────────────
 // In-memory map of running jobs (meetingId → { jobId, promise }). Used for
@@ -1188,10 +1199,35 @@ async function handleApi(request, response, url) {
         sendError(response, 400, `Send up to ${MAX_TRANSLATE_ITEMS} texts (${MAX_TRANSLATE_CHARS} characters) and a target language`);
         return true;
       }
-      sendJson(response, 200, { translations: await translator.translate(texts, to) });
+      if (parseTranslationPair(to)) {
+        const sources = Array.isArray(body?.from) ? body.from.map(value => (typeof value === 'string' ? value.slice(0, 20) : '')) : [];
+        sendJson(response, 200, await translator.translatePair(texts, to, sources));
+      } else {
+        sendJson(response, 200, { translations: await translator.translate(texts, to) });
+      }
     } catch (error) {
       if (error.llmCode) sendLlmError(response, error);
       else throw error;
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/captions/stream' && request.method === 'GET') {
+    captions.subscribe(response);
+    return true;
+  }
+  if (request.method === 'POST' && url.pathname.startsWith('/api/captions')) {
+    const body = url.pathname === '/api/captions/clear' ? {} : await readJsonRequest(request);
+    if (url.pathname === '/api/captions') {
+      if (!captions.publishCaption(body)) return sendError(response, 400, 'Caption text is required'), true;
+      sendJson(response, 200, { ok: true });
+    } else if (url.pathname === '/api/captions/config') {
+      sendJson(response, 200, captions.setConfig(body));
+    } else if (url.pathname === '/api/captions/clear') {
+      captions.clear();
+      sendJson(response, 200, { ok: true });
+    } else {
+      return false;
     }
     return true;
   }

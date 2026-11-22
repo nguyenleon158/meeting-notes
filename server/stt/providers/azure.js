@@ -6,7 +6,7 @@
    the host is built only from a validated region id.
    ============================================ */
 
-const { STT_ERROR, sttError } = require('../contracts');
+const { STT_ERROR, sttError, languageSetLocales } = require('../contracts');
 const { fetchWithTimeout, httpErrorFor } = require('./http');
 
 const API_VERSION = '2024-11-15';
@@ -16,6 +16,8 @@ const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 // shared per-call timeout (a 2-hour recording can take several minutes).
 const TRANSCRIBE_TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_SPEAKERS = 10;
+// Speech authorization tokens from issueToken are valid for 10 minutes.
+const TOKEN_LIFETIME_SECONDS = 600;
 
 const MODELS = [{ id: 'fast', label: 'Fast transcription' }];
 
@@ -29,7 +31,7 @@ function normalizeRegion(value) {
 
 // Azure expects a full BCP-47 locale ("km-KH"); "auto" means let Azure pick.
 function toLocale(value) {
-  if (!value || value === 'auto') return '';
+  if (!value || value === 'auto' || languageSetLocales(value).length) return '';
   const text = String(value);
   return text.includes('-') ? text : '';
 }
@@ -82,10 +84,29 @@ function createAzureAdapter(deps) {
       method: 'POST',
       headers: { 'Ocp-Apim-Subscription-Key': key, 'Content-Length': '0' },
       timeoutMs,
-      provider: id
+      provider: id,
+      retryStaleConnection: true
     });
     if (!response.ok) throw await httpErrorFor(response, id, body => body?.error?.message);
     return { ok: true, message: `Azure Speech connection succeeded (${region}).` };
+  }
+
+  // Live recognition runs in the browser through the Speech SDK. It gets a
+  // short-lived authorization token (valid 10 minutes), never the key itself;
+  // the client refreshes it before it expires.
+  async function grantTemporaryKey() {
+    const { key, region } = await requireCredentials();
+    const response = await fetchWithTimeout(`https://${region}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, {
+      method: 'POST',
+      headers: { 'Ocp-Apim-Subscription-Key': key, 'Content-Length': '0' },
+      timeoutMs,
+      provider: id,
+      retryStaleConnection: true
+    });
+    if (!response.ok) throw await httpErrorFor(response, id, body => body?.error?.message);
+    const token = (await response.text()).trim();
+    if (!token) throw sttError(STT_ERROR.PROVIDER_UNAVAILABLE, 'Azure Speech returned an empty token.', { provider: id });
+    return { token, region, expiresInSeconds: TOKEN_LIFETIME_SECONDS };
   }
 
   async function postTranscription({ key, region, audio, definition }) {
@@ -107,8 +128,10 @@ function createAzureAdapter(deps) {
 
   async function transcribe({ audio, language }) {
     const { key, region } = await requireCredentials();
+    // One locale, or a language set's candidates (Azure picks per phrase).
     const locale = toLocale(language);
-    const base = locale ? { locales: [locale] } : {};
+    const candidates = locale ? [locale] : languageSetLocales(language);
+    const base = candidates.length ? { locales: candidates } : {};
 
     // Diarization is not offered for every locale; if Azure rejects the
     // request with it on, retry once without so the transcript still lands.
@@ -144,11 +167,13 @@ function createAzureAdapter(deps) {
     needsKey: true,
     needsRegion: true,
     supportsTranslation: false,
+    supportsLive: true,
     maxUploadBytes: MAX_UPLOAD_BYTES,
     getStatus,
     listModels,
     testConnection,
-    transcribe
+    transcribe,
+    grantTemporaryKey
   };
 }
 

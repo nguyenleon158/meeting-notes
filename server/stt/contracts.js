@@ -125,11 +125,23 @@ function groupWordsIntoSegments(words, translation = false) {
   return segments;
 }
 
+// Spoken-language sets: a meeting that switches between these locales. Azure
+// Speech detects the locale of every phrase among them; providers without
+// candidate-language detection treat the set as plain auto-detect.
+const LANGUAGE_SETS = Object.freeze({
+  'auto-km-vi-en': Object.freeze(['km-KH', 'vi-VN', 'en-US'])
+});
+
+function languageSetLocales(code) {
+  return LANGUAGE_SETS[code] ? [...LANGUAGE_SETS[code]] : [];
+}
+
 module.exports = {
   STT_ERROR,
   RETRYABLE_CODES,
   sttError,
   tagProvider,
   normalizeResult,
-  groupWordsIntoSegments
+  groupWordsIntoSegments,
+  languageSetLocales
 };

@@ -5,7 +5,7 @@
    (Live streaming stays in the browser transcriber.)
    ============================================ */
 
-const { STT_ERROR, sttError, tagProvider, normalizeResult } = require('./contracts');
+const { STT_ERROR, sttError, tagProvider, normalizeResult, languageSetLocales } = require('./contracts');
 const { createSonioxAdapter } = require('./providers/soniox');
 const { createDeepgramAdapter } = require('./providers/deepgram');
 const { createWhisperAdapter } = require('./providers/whisper');
@@ -118,8 +118,10 @@ function createSttService(deps) {
 
     const buffer = await loadAudio();
     const audio = { buffer, mimeType: audioMeta?.mimeType, filename: audioMeta?.filename, size: audioMeta?.size ?? buffer.length };
+    // Only Azure Speech can detect among a language set's candidates.
+    const providerLanguage = languageSetLocales(language).length && adapter.id !== 'azure' ? 'auto' : language;
     const raw = await enqueue(adapter.id, () =>
-      adapter.transcribe({ audio, language, translationLanguage, model })
+      adapter.transcribe({ audio, language: providerLanguage, translationLanguage, model })
         .catch(error => { throw tagProvider(error, adapter.id); }));
 
     return normalizeResult(raw, adapter.id);

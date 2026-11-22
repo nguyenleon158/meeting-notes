@@ -322,6 +322,29 @@
   gap: var(--space-2);
 }
 
+/* Captions on the projector screen: a full-width row under the controls. */
+.recording-captions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.recording-captions-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recording-captions-field .input {
+  min-width: 150px;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+
 /* ── System Audio Toggle ── */
 .system-audio-toggle {
   display: inline-flex;

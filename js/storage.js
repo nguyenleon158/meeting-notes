@@ -412,7 +412,7 @@ const Storage = {
       translations,
       sonioxUsage: meeting.sonioxUsage && typeof meeting.sonioxUsage === 'object'
         ? {
-            provider: ['soniox', 'deepgram', 'whisper', 'google'].includes(meeting.sonioxUsage.provider)
+            provider: ['soniox', 'deepgram', 'whisper', 'google', 'azure'].includes(meeting.sonioxUsage.provider)
               ? meeting.sonioxUsage.provider
               : 'soniox',
             model: string(meeting.sonioxUsage.model, 'stt-rt-v5', 100),
@@ -444,6 +444,10 @@ const Storage = {
       audioBlob: null,
       language: string(meeting.language, this.DEFAULT_SETTINGS.language, 20),
       translationLanguage: string(meeting.translationLanguage, '', 20),
+      meetingMode: ['single', 'multi', 'khmer'].includes(meeting.meetingMode) ? meeting.meetingMode : '',
+      sttProvider: ['soniox', 'deepgram', 'whisper', 'google', 'azure'].includes(meeting.sttProvider) ? meeting.sttProvider : '',
+      captionDisplay: string(meeting.captionDisplay, '', 20),
+      captionFontPx: Number.isFinite(Number(meeting.captionFontPx)) ? Math.min(120, Math.max(5, Math.round(Number(meeting.captionFontPx)))) : null,
       translationError: string(meeting.translationError, '', 500),
       createdAt: string(meeting.createdAt, new Date().toISOString(), 64),
       updatedAt: string(meeting.updatedAt, new Date().toISOString(), 64)

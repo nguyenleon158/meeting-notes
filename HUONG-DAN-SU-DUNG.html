@@ -947,16 +947,20 @@
               </tr>
               <tr>
                 <td><strong>Azure Speech</strong></td>
-                <td><span class="badge-no">Không</span></td>
                 <td><span class="badge-yes">Có</span></td>
-                <td><span class="badge-no">Không</span></td>
-                <td>Hỗ trợ tiếng Khmer. Cần cả API key và Region (ví dụ <code>southeastasia</code>). File dưới 2&nbsp;giờ và 250&nbsp;MB.</td>
+                <td><span class="badge-yes">Có</span></td>
+                <td><span class="badge-yes">Có</span></td>
+                <td>Hỗ trợ tiếng Khmer. Cần cả API key và Region (ví dụ <code>southeastasia</code>). File dưới 2&nbsp;giờ và 250&nbsp;MB. Live cần chọn ngôn ngữ nói cụ thể và không tách người&nbsp;nói.</td>
               </tr>
             </tbody>
           </table>
         </div>
         <div class="callout info">
-          💡 Họp bằng tiếng Khmer: chọn Azure Speech, chọn ngôn ngữ Khmer rồi upload file ghi âm. Soniox và Deepgram chưa hỗ trợ&nbsp;Khmer.<br>
+          💡 Ba loại cuộc họp: <strong>Single language</strong> (một ngôn ngữ, dịch một ngôn ngữ), <strong>Multi-language</strong> (tiếng Anh hoặc tiếng khác → Việt, tiếng Việt → Anh), <strong>Khmer (Cambodia)</strong> (chỉ dùng Azure&nbsp;Speech).<br>
+          💡 Họp bằng tiếng Khmer: chọn tab <strong>Khmer (Cambodia)</strong>, ngôn ngữ nói là Khmer. Tab này luôn dùng Azure Speech (cần key và Region của Azure Speech); chọn Translate To là Tiếng Việt thì cột trái hiện tiếng Khmer, cột phải hiện tiếng Việt gần như ngay lúc nói. Gói Free F0 có 5&nbsp;giờ live mỗi&nbsp;tháng.<br>
+          💡 Họp xen kẽ Khmer, Việt, Anh: chọn ngôn ngữ nói <strong>Tự nhận: Khmer / Tiếng Việt / English</strong>. Azure nhận ngôn ngữ từng câu rồi dịch sang ngôn ngữ ở Translate To; từ đầu tiên ngay lúc đổi ngôn ngữ đôi khi bị nhận&nbsp;nhầm.<br>
+          💡 Phụ đề trên màn chiếu: ở màn hình ghi âm, chọn <strong>Show in</strong> (ngôn ngữ cho khán giả) và <strong>Text size</strong> (px), bấm <strong>Show over slides</strong> để hiện phụ đề nổi trên slide toàn màn hình; <strong>Hide</strong> hoặc Control&nbsp;+&nbsp;Option&nbsp;+&nbsp;C để tắt; <strong>Move / resize</strong> rồi <strong>Done</strong> để đổi vị trí và kích&nbsp;thước.<br>
+          💡 Họp xen tiếng Anh và tiếng Việt: chọn tab <strong>Multi-language</strong> (Translate To là Tiếng Việt ↔&nbsp;English). Câu tiếng Anh dịch ra tiếng Việt, câu tiếng Việt dịch ra tiếng Anh. Với Soniox, ngôn ngữ thứ ba chỉ được chép lại, không&nbsp;dịch.<br>
           💡 Dịch sang Khmer (ví dụ nói tiếng Việt): nhập key và Region của Azure Translator trong Settings, rồi chọn Translate To là Khmer. Ghi âm trực tiếp sẽ dịch từng câu; upload sẽ dịch cả transcript. Gói Free được 2&nbsp;triệu ký tự mỗi&nbsp;tháng.<br>
           💡 Nếu chọn Whisper, Google hoặc Azure nhưng vẫn muốn ghi trực tiếp, cần cấu hình thêm Soniox vì app dùng Soniox cho luồng live&nbsp;fallback.
         </div>

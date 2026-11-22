@@ -35,14 +35,14 @@ contents="$build_root/MeetNote.app/Contents"
 /usr/bin/ditto "$project_dir/macos/Info.plist" "$contents/Info.plist"
 
 echo "Compiling launcher…"
-/usr/bin/swiftc -O -target arm64-apple-macos13.0 -framework Cocoa \
+/usr/bin/swiftc -O -target arm64-apple-macos13.0 -framework Cocoa -framework WebKit -framework Carbon \
   "$project_dir/macos/MeetNoteLauncher.swift" \
   -o "$contents/MacOS/MeetNote"
 
 /usr/bin/ditto "$build_root/node-v$node_version-darwin-arm64/bin/node" "$contents/Resources/runtime/node"
 /bin/chmod 755 "$contents/MacOS/MeetNote" "$contents/Resources/runtime/node"
 
-for item in server.js server index.html css js schemas package.json; do
+for item in server.js server index.html captions.html css js schemas package.json; do
   /usr/bin/ditto "$project_dir/$item" "$contents/Resources/app/$item"
 done
 

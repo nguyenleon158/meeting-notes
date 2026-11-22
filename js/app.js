@@ -23,6 +23,9 @@ const App = {
   _themeMedia: null,
   _pendingAutoStartMeetingId: null,
   SONIOX_REALTIME_USD_PER_HOUR: 0.12,
+  // Azure Speech list prices (S0): real-time recognition, and speech translation.
+  AZURE_LIVE_USD_PER_HOUR: 1.0,
+  AZURE_LIVE_TRANSLATION_USD_PER_HOUR: 2.5,
   SONIOX_ASYNC_USD_PER_HOUR: 0.10,
   SONIOX_ASYNC_TRANSLATION_USD_PER_HOUR: 0.16,
 
@@ -423,7 +426,7 @@ const App = {
           ...meeting.sonioxUsage,
           endedAt: new Date().toISOString(),
           billableDurationSeconds: duration,
-          estimatedCostUsd: this._estimateSonioxCost(duration)
+          estimatedCostUsd: this._estimateSonioxCost(duration, meeting.sonioxUsage.pricingUsdPerHour ?? this.SONIOX_REALTIME_USD_PER_HOUR)
         };
       }
       Storage.saveMeeting(meeting);
@@ -738,14 +741,94 @@ const App = {
      VIEW: New Meeting
      ══════════════════════════════════════════ */
 
-  _renderNewMeeting() {
+  // Meeting setup modes. Each one offers only the languages it is for; the
+  // Khmer mode (Cambodia market) records with Azure Speech only.
+  _SETUP_MODES: [
+    { id: 'single', label: 'Single language' },
+    { id: 'multi', label: 'Multi-language' },
+    { id: 'khmer', label: 'Khmer (Cambodia)' }
+  ],
+
+  // Language choices and defaults for one setup mode.
+  _setupModeConfig(mode) {
     const settings = Storage.getSettings();
     const languages = Transcriber.getSupportedLanguages();
-    const langOptions = `<option value="auto" ${settings.language === 'auto' ? 'selected' : ''}>Auto-detect multilingual (Recommended)</option>` + languages.map(l =>
-      `<option value="${l.code}" ${l.code === settings.language ? 'selected' : ''}>${l.name}</option>`
+    const byCode = code => languages.find(language => language.code === code);
+    const targets = Transcriber.getTranslationLanguages();
+    const target = code => targets.find(language => language.sonioxCode === code);
+    const pairs = Transcriber.getTranslationPairs();
+    const toChoice = language => ({ value: language.code, name: language.name });
+    const toTarget = language => ({ value: language.sonioxCode, name: language.name });
+
+    if (mode === 'multi') {
+      return {
+        provider: '',
+        spoken: [{ value: 'auto', name: 'Auto-detect — people switch languages' }],
+        spokenDefault: 'auto',
+        targets: pairs.map(pair => ({ value: pair.code, name: pair.name })),
+        targetDefault: pairs[0]?.code || '',
+        help: 'English (or another language) is translated to Tiếng Việt, and Tiếng Việt to English. With Soniox, a third language is transcribed but not translated.'
+      };
+    }
+    if (mode === 'khmer') {
+      return {
+        provider: 'azure',
+        spoken: ['km-KH', 'auto-km-vi-en', 'vi-VN', 'en-US'].map(byCode).filter(Boolean).map(toChoice),
+        spokenDefault: 'km-KH',
+        targets: [...['vi', 'en', 'km'].map(target).filter(Boolean).map(toTarget), ...pairs.map(pair => ({ value: pair.code, name: pair.name }))],
+        targetDefault: 'vi',
+        help: 'For meetings in Cambodia. Records and translates with Azure Speech only (add the Azure Speech key and region in Settings). Soniox and Deepgram cannot hear Khmer.'
+      };
+    }
+    // One language that Soniox/Deepgram can hear (Khmer lives in its own mode).
+    const spoken = languages.filter(language => language.liveSupported !== false).map(toChoice);
+    const singleTargets = targets.filter(language => language.sonioxCode !== 'km').map(toTarget);
+    return {
+      provider: '',
+      spoken,
+      spokenDefault: spoken.some(choice => choice.value === settings.language) ? settings.language : 'vi-VN',
+      targets: singleTargets,
+      targetDefault: singleTargets.some(choice => choice.value === settings.translationLanguage) ? settings.translationLanguage : '',
+      help: 'One spoken language, translated into one language, with the speech provider chosen in Settings.'
+    };
+  },
+
+  // The spoken-language and Translate To fields of one setup mode.
+  _setupModeFields(mode) {
+    const config = this._setupModeConfig(mode);
+    const options = (choices, selected) => choices.map(choice =>
+      `<option value="${Utils.escapeHtml(choice.value)}" ${choice.value === selected ? 'selected' : ''}>${Utils.escapeHtml(choice.name)}</option>`
     ).join('');
-    const translationOptions = Transcriber.getTranslationLanguages().map(language =>
-      `<option value="${language.sonioxCode}" ${language.sonioxCode === settings.translationLanguage ? 'selected' : ''}>${language.name}</option>`
+    return `
+      <p class="text-sm text-secondary" style="max-width: 65ch; text-wrap: pretty;">${Utils.escapeHtml(config.help)}</p>
+      <div class="input-group">
+        <label for="meeting-language">Spoken Language</label>
+        <select class="input" id="meeting-language" ${config.spoken.length === 1 ? 'disabled' : ''}>
+          ${options(config.spoken, config.spokenDefault)}
+        </select>
+      </div>
+      <div class="input-group">
+        <label for="meeting-translation-language">Translate To</label>
+        <select class="input" id="meeting-translation-language">
+          <option value="" ${config.targetDefault ? '' : 'selected'}>Off — original transcript only</option>
+          ${options(config.targets, config.targetDefault)}
+        </select>
+        <span class="text-xs text-tertiary" id="meeting-translation-help"></span>
+      </div>
+    `;
+  },
+
+  // Open the setup on the mode of the latest meeting that recorded one.
+  _defaultSetupMode() {
+    const last = Storage.getAllMeetings().find(meeting => meeting.meetingMode);
+    if (this._SETUP_MODES.some(mode => mode.id === last?.meetingMode)) return last.meetingMode;
+    return Transcriber.getTranslationPairs().some(pair => pair.code === Storage.getSettings().translationLanguage) ? 'multi' : 'single';
+  },
+
+  _renderNewMeeting() {
+    const mode = this._defaultSetupMode();
+    const modeTabs = this._SETUP_MODES.map(item =>
+      `<button type="button" class="tab ${item.id === mode ? 'active' : ''}" data-setup-mode="${item.id}" role="tab" aria-selected="${item.id === mode}">${Utils.escapeHtml(item.label)}</button>`
     ).join('');
 
     return `
@@ -765,20 +848,12 @@ const App = {
             </div>
 
             <div class="input-group">
-              <label for="meeting-language">Spoken Language</label>
-              <select class="input" id="meeting-language">
-                ${langOptions}
-              </select>
-              <span class="text-xs text-tertiary">Choose Auto when people may switch between Vietnamese, English, or other languages.</span>
+              <label>Meeting Type</label>
+              <div class="tabs" role="tablist" id="meeting-mode-tabs" data-mode="${mode}">${modeTabs}</div>
             </div>
 
-            <div class="input-group">
-              <label for="meeting-translation-language">Translate To</label>
-              <select class="input" id="meeting-translation-language">
-                <option value="">Off — original transcript only</option>
-                ${translationOptions}
-              </select>
-              <span class="text-xs text-tertiary" id="meeting-translation-help"></span>
+            <div class="flex flex-col gap-5" id="meeting-mode-fields">
+              ${this._setupModeFields(mode)}
             </div>
           </div>
 
@@ -825,49 +900,70 @@ const App = {
   },
 
   _bindNewMeeting() {
-    const translationSelect = document.getElementById('meeting-translation-language');
-    const translationHelp = document.getElementById('meeting-translation-help');
+    const modeTabs = document.getElementById('meeting-mode-tabs');
+    const modeFields = document.getElementById('meeting-mode-fields');
+    const currentMode = () => modeTabs?.dataset.mode || 'single';
+    modeTabs?.querySelectorAll('[data-setup-mode]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const mode = tab.dataset.setupMode;
+        if (mode === currentMode()) return;
+        modeTabs.dataset.mode = mode;
+        modeTabs.querySelectorAll('[data-setup-mode]').forEach(item => {
+          const active = item === tab;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-selected', String(active));
+        });
+        modeFields.innerHTML = this._setupModeFields(mode);
+        bindTranslationHelp();
+      });
+    });
+
+    const bindTranslationHelp = () => {
+      const translationSelect = document.getElementById('meeting-translation-language');
+      translationSelect?.addEventListener('change', updateTranslationHelp);
+      updateTranslationHelp();
+    };
     const updateTranslationHelp = () => {
+      const translationSelect = document.getElementById('meeting-translation-language');
+      const translationHelp = document.getElementById('meeting-translation-help');
       if (!translationSelect || !translationHelp) return;
       if (!translationSelect.value) {
         translationHelp.textContent = 'Realtime speech-to-text stays on and shows the original words in each detected spoken language.';
         return;
       }
       const targetName = translationSelect.selectedOptions[0]?.textContent?.trim() || translationSelect.value;
+      if (translationSelect.value === 'pair-vi-en') {
+        translationHelp.textContent = 'Tiếng Việt is translated to English and English to Tiếng Việt. With Soniox, other languages are transcribed but not translated; with Azure Speech (Khmer), they are translated to Tiếng Việt.';
+        return;
+      }
       translationHelp.textContent = `Realtime speech-to-text keeps the original transcript and adds a live translation to ${targetName}.`;
     };
-    translationSelect?.addEventListener('change', updateTranslationHelp);
-    updateTranslationHelp();
+    bindTranslationHelp();
+
+    // Language, translation and provider chosen by the active setup mode.
+    const readSetup = () => {
+      const mode = currentMode();
+      return {
+        title: document.getElementById('meeting-title').value.trim() || 'Untitled Meeting',
+        participants: document.getElementById('meeting-participants').value
+          .split(',').map(p => p.trim()).filter(Boolean),
+        language: document.getElementById('meeting-language').value,
+        translationLanguage: document.getElementById('meeting-translation-language').value,
+        meetingMode: mode,
+        sttProvider: this._setupModeConfig(mode).provider
+      };
+    };
 
     document.getElementById('start-recording-btn')?.addEventListener('click', () => {
-      const title = document.getElementById('meeting-title').value.trim() || 'Untitled Meeting';
-      const participants = document.getElementById('meeting-participants').value
-        .split(',').map(p => p.trim()).filter(Boolean);
-      const language = document.getElementById('meeting-language').value;
-      const translationLanguage = document.getElementById('meeting-translation-language').value;
       const captureSystemAudio = document.getElementById('setup-system-audio')?.checked || false;
-
-      const meeting = Storage.saveMeeting({
-        title,
-        participants,
-        language,
-        translationLanguage,
-        captureSystemAudio,
-        status: 'draft'
-      });
+      const meeting = Storage.saveMeeting({ ...readSetup(), captureSystemAudio, status: 'draft' });
 
       this._pendingAutoStartMeetingId = meeting.id;
       this.navigate(`recording/${meeting.id}`);
     });
 
     document.getElementById('save-draft-btn')?.addEventListener('click', () => {
-      const title = document.getElementById('meeting-title').value.trim() || 'Untitled Meeting';
-      const participants = document.getElementById('meeting-participants').value
-        .split(',').map(p => p.trim()).filter(Boolean);
-      const language = document.getElementById('meeting-language').value;
-      const translationLanguage = document.getElementById('meeting-translation-language').value;
-
-      Storage.saveMeeting({ title, participants, language, translationLanguage, status: 'draft' });
+      Storage.saveMeeting({ ...readSetup(), status: 'draft' });
       this.toast('Meeting draft saved', 'success');
       this.navigate('meetings');
       this._updateMeetingsCount();
@@ -877,6 +973,46 @@ const App = {
   /* ══════════════════════════════════════════
      VIEW: Recording
      ══════════════════════════════════════════ */
+
+  // Caption text size typed by the user, kept within the allowed px range.
+  _captionFontPx(value) {
+    const { min, max } = CaptionFeed.FONT_PX;
+    const px = Math.round(Number(value));
+    return Number.isFinite(px) && px > 0 ? Math.min(max, Math.max(min, px)) : CaptionFeed.FONT_PX.default;
+  },
+
+  // "Captions on screen" row of the recording view: what the projector shows.
+  _recordingCaptionControls(meeting) {
+    const choices = CaptionFeed.displayChoices(meeting);
+    const selectedDisplay = choices.some(choice => choice.value === meeting.captionDisplay) ? meeting.captionDisplay : choices[0].value;
+    const { min, max } = CaptionFeed.FONT_PX;
+    const savedPx = Number(meeting.captionFontPx);
+    const fontPx = savedPx >= min && savedPx <= max ? Math.round(savedPx) : CaptionFeed.FONT_PX.default;
+    const displayOptions = choices.map(choice =>
+      `<option value="${Utils.escapeHtml(choice.value)}" ${choice.value === selectedDisplay ? 'selected' : ''}>${Utils.escapeHtml(choice.label)}</option>`
+    ).join('');
+    return `
+      <div class="recording-captions">
+        <span class="text-sm" style="font-weight: 600;">Captions on screen</span>
+        <label class="recording-captions-field">
+          <span class="text-xs text-tertiary">Show in</span>
+          <select class="input" id="rec-caption-display">${displayOptions}</select>
+        </label>
+        <label class="recording-captions-field">
+          <span class="text-xs text-tertiary">Text size (px, ${min}–${max})</span>
+          <span class="flex items-center gap-2">
+            <input type="number" class="input" id="rec-caption-size" min="${min}" max="${max}" step="1" value="${fontPx}" style="width: 90px; min-width: 0;" aria-label="Caption text size in pixels">
+            <span class="text-sm text-secondary">px</span>
+          </span>
+        </label>
+        <button type="button" class="btn btn-secondary btn-sm" id="rec-caption-overlay" title="Floating captions over full-screen slides (MeetNote Mac app)">Show over slides</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="rec-caption-hide" title="Turn the floating captions off (Control+Option+C toggles them from any app)">Hide</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="rec-caption-window" title="Captions in a browser window">Open in window</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="rec-caption-move" title="Drag the floating captions to move them; drag an edge or corner to resize">Move / resize</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="rec-caption-lock" title="Lock the floating captions in place (or double-click them)">Done</button>
+      </div>
+    `;
+  },
 
   _renderRecording(meetingId) {
     const meeting = Storage.getMeeting(meetingId);
@@ -899,7 +1035,7 @@ const App = {
 
             <div class="recording-live-metrics">
               <div class="timer-display" id="rec-timer">00:00</div>
-              <div class="text-xs text-tertiary" id="rec-cost">Soniox estimate: $0.0000</div>
+              <div class="text-xs text-tertiary" id="rec-cost">Cost estimate: $0.0000</div>
               <div class="waveform-container" id="rec-waveform">
                 ${bars}
               </div>
@@ -932,6 +1068,8 @@ const App = {
                 Press the record button to begin
               </div>
             </div>
+
+            ${this._recordingCaptionControls(meeting)}
           </div>
 
           <!-- Bottom: Original transcript and optional translation -->
@@ -939,7 +1077,7 @@ const App = {
             <section class="recording-transcript-panel">
               <div class="panel-header">
                 <h4 style="font-size: var(--text-sm);">📝 Live Transcript</h4>
-                <span class="badge badge-primary" id="rec-lang-badge">${Utils.escapeHtml(meeting.language === 'auto' ? 'Auto multilingual' : (meeting.language || 'vi-VN'))}</span>
+                <span class="badge badge-primary" id="rec-lang-badge">${Utils.escapeHtml(meeting.language === 'auto' ? 'Auto multilingual' : (meeting.language === 'auto-km-vi-en' ? 'Khmer / Việt / English' : (meeting.language || 'vi-VN')))}</span>
               </div>
               <div class="panel-body" id="rec-transcript-body">
                 <div class="empty-state" id="rec-transcript-empty" style="padding: var(--space-8);">
@@ -954,7 +1092,7 @@ const App = {
               <section class="recording-transcript-panel" id="rec-translation-section">
                 <div class="panel-header">
                   <h4 style="font-size: var(--text-sm);">🌐 Live Translation</h4>
-                  <span class="badge badge-success">→ ${Utils.escapeHtml(meeting.translationLanguage)}</span>
+                  <span class="badge badge-success">→ ${Utils.escapeHtml(Transcriber.translationLabel(meeting.translationLanguage))}</span>
                 </div>
                 <div class="panel-body" id="rec-translation-body">
                   <div class="empty-state" id="rec-translation-empty" style="padding: var(--space-8);">
@@ -1092,10 +1230,22 @@ const App = {
       }
     };
 
+    // Which live backend this meeting uses, for badges and the cost estimate.
+    const _liveOptions = { language: meeting.language || 'vi-VN', translationLanguage: meeting.translationLanguage || '', provider: meeting.sttProvider || '' };
+    const _liveLabelText = Transcriber.liveProviderLabel(_liveOptions);
+    const _live = _liveLabelText === 'Azure Speech'
+      ? {
+        label: 'Azure Speech',
+        provider: 'azure',
+        model: _liveOptions.translationLanguage ? 'speech-translation' : 'realtime',
+        rate: _liveOptions.translationLanguage ? this.AZURE_LIVE_TRANSLATION_USD_PER_HOUR : this.AZURE_LIVE_USD_PER_HOUR
+      }
+      : { label: _liveLabelText, provider: _liveLabelText.toLowerCase(), model: _liveLabelText === 'Soniox' ? 'stt-rt-v5' : 'nova-3', rate: this.SONIOX_REALTIME_USD_PER_HOUR };
+
     // Recorder callbacks
     Recorder.onTick = (seconds) => {
       timerEl.textContent = Utils.formatDuration(seconds);
-      costEl.textContent = `Soniox estimate: ${this._formatUsd(this._estimateSonioxCost(seconds))}`;
+      costEl.textContent = `${_live.label} estimate: ${this._formatUsd(this._estimateSonioxCost(seconds, _live.rate))}`;
     };
 
     Recorder.onWaveform = (data) => {
@@ -1105,8 +1255,43 @@ const App = {
     Recorder.onStop = null;
     Recorder.onChunk = chunk => Transcriber.sendAudio(chunk);
 
+    // Captions on the projector screen follow the live results.
+    const captionChoices = CaptionFeed.displayChoices(meeting);
+    const captionDisplay = document.getElementById('rec-caption-display');
+    const captionSize = document.getElementById('rec-caption-size');
+    const captionSettings = () => ({
+      bands: (captionChoices.find(choice => choice.value === captionDisplay?.value) || captionChoices[0]).bands,
+      fontPx: this._captionFontPx(captionSize?.value),
+      title: meeting.title
+    });
+    const onCaptionSettingsChange = () => {
+      captionSize.value = this._captionFontPx(captionSize.value); // show the size actually used
+      Storage.saveMeeting({ id: meetingId, captionDisplay: captionDisplay.value, captionFontPx: this._captionFontPx(captionSize.value) });
+      CaptionFeed.configure(captionSettings());
+    };
+    captionDisplay?.addEventListener('change', onCaptionSettingsChange);
+    captionSize?.addEventListener('change', onCaptionSettingsChange);
+    // Resize live while typing or stepping, so the size can be judged on the projector.
+    let captionSizeTimer = null;
+    captionSize?.addEventListener('input', () => {
+      clearTimeout(captionSizeTimer);
+      captionSizeTimer = setTimeout(() => CaptionFeed.configure(captionSettings()), 120);
+    });
+    document.getElementById('rec-caption-hide')?.addEventListener('click', () => CaptionFeed.openOverlay('hide'));
+    document.getElementById('rec-caption-overlay')?.addEventListener('click', () => {
+      CaptionFeed.configure(captionSettings());
+      CaptionFeed.openOverlay();
+    });
+    document.getElementById('rec-caption-move')?.addEventListener('click', () => CaptionFeed.openOverlay('edit'));
+    document.getElementById('rec-caption-lock')?.addEventListener('click', () => CaptionFeed.openOverlay('lock'));
+    document.getElementById('rec-caption-window')?.addEventListener('click', () => {
+      CaptionFeed.configure(captionSettings());
+      CaptionFeed.openWindow();
+    });
+
     // Transcriber callbacks
     Transcriber.onResult = (result) => {
+      CaptionFeed.push(result);
       if (result.isFinal) {
         removeInterim(result.channel);
         addTranscriptSegment(
@@ -1127,16 +1312,16 @@ const App = {
 
     Transcriber.onStatusChange = (status) => {
       if (status === 'connecting') {
-        statusEl.innerHTML = '<span class="badge badge-warning">Connecting to Soniox…</span>';
+        statusEl.innerHTML = `<span class="badge badge-warning">Connecting to ${_live.label}…</span>`;
       } else if (status === 'listening') {
-        statusEl.innerHTML = `<span class="badge badge-recording">● Recording · ${_activeAudioMode} · Soniox live</span>`;
+        statusEl.innerHTML = `<span class="badge badge-recording">● Recording · ${_activeAudioMode} · ${_live.label} live</span>`;
       } else if (status === 'reconnecting') {
         // Audio keeps recording to disk; only the live transcript is waiting.
         this._flushTranscriptSave(meetingId);
         statusEl.innerHTML = `<span class="badge badge-warning">● Recording audio (${_activeAudioMode}) · transcription reconnecting…</span>`;
         this.toast('Live transcription disconnected. Audio is still recording — reconnecting…', 'warning');
       } else if (status === 'reconnected') {
-        statusEl.innerHTML = `<span class="badge badge-recording">● Recording · ${_activeAudioMode} · Soniox live</span>`;
+        statusEl.innerHTML = `<span class="badge badge-recording">● Recording · ${_activeAudioMode} · ${_live.label} live</span>`;
         this.toast('Live transcription reconnected.', 'success');
       } else if (status === 'paused') {
         statusEl.innerHTML = '<span class="badge badge-warning">⏸ Paused</span>';
@@ -1145,7 +1330,7 @@ const App = {
       }
     };
     Transcriber.onError = error => {
-      this.toast(error.message || 'Soniox transcription failed', 'error');
+      this.toast(error.message || `${_live.label} transcription failed`, 'error');
     };
 
     // Toggle recording
@@ -1166,7 +1351,7 @@ const App = {
         Recorder.onSystemAudioLost = () => {
           _activeAudioMode = 'Mic';
           this.toast('System audio share was stopped. Continuing with microphone only.', 'warning');
-          statusEl.innerHTML = '<span class="badge badge-recording">● Recording · Mic only · Soniox live</span>';
+          statusEl.innerHTML = `<span class="badge badge-recording">● Recording · Mic only · ${_live.label} live</span>`;
         };
 
         // Start recorder with optional system audio. Passing meetingId enables
@@ -1195,13 +1380,17 @@ const App = {
           this.toast('System audio was not captured (cancelled or unsupported). Recording mic only.', 'warning');
         }
 
+        CaptionFeed.start(meeting, captionSettings());
         const transcriptionStarted = await Transcriber.start({
           meetingId,
           title: meeting.title,
           participants: meeting.participants,
           language: meeting.language || 'vi-VN',
           translationLanguage: meeting.translationLanguage || '',
+          provider: meeting.sttProvider || '',
           restartAudioFeed: () => Recorder.restartLiveFeed(),
+          getAudioStream: () => Recorder.getRecordingStream(),
+          getElapsedSeconds: () => Recorder.getElapsedSeconds(),
           log: (level, event, message, context) => this._logClientEvent(level, event, message, { meetingId, ...context })
         });
 
@@ -1209,10 +1398,10 @@ const App = {
           const usageMeeting = Storage.getMeeting(meetingId);
           if (usageMeeting) {
             usageMeeting.sonioxUsage = {
-              provider: 'soniox',
-              model: 'stt-rt-v5',
+              provider: _live.provider,
+              model: _live.model,
               startedAt: new Date().toISOString(),
-              pricingUsdPerHour: this.SONIOX_REALTIME_USD_PER_HOUR,
+              pricingUsdPerHour: _live.rate,
               translationEnabled: Boolean(meeting.translationLanguage),
               estimatedCostUsd: 0
             };
@@ -1231,7 +1420,7 @@ const App = {
         timerEl.classList.add('recording');
 
         statusEl.innerHTML = transcriptionStarted
-          ? `<span class="badge badge-recording">● Recording · ${_activeAudioMode} · Soniox live</span>`
+          ? `<span class="badge badge-recording">● Recording · ${_activeAudioMode} · ${_live.label} live</span>`
           : `<span class="badge badge-warning">Recording audio (${_activeAudioMode}) · transcription unavailable</span>`;
       }
     };
@@ -1341,7 +1530,7 @@ const App = {
       <div class="transcript-block">
         <span class="transcript-time">${Utils.formatTimestamp(seg.time)}</span>
         <div class="flex-1">
-          <div class="transcript-speaker">${Utils.escapeHtml(seg.language || meeting.translationLanguage || 'Translation')}</div>
+          <div class="transcript-speaker">${Utils.escapeHtml(seg.language || Transcriber.translationLabel(meeting.translationLanguage) || 'Translation')}</div>
           <div class="transcript-text">${Utils.escapeHtml(seg.text)}</div>
         </div>
       </div>
@@ -1488,7 +1677,7 @@ const App = {
           ${meeting.translationLanguage ? `
             <div class="tab-content" id="tab-translation">
               <div class="flex justify-between items-center" style="margin-bottom: var(--space-4);">
-                <span class="text-sm text-secondary">${(meeting.translations || []).length} translated segments · ${Utils.escapeHtml(meeting.translationLanguage)}</span>
+                <span class="text-sm text-secondary">${(meeting.translations || []).length} translated segments · ${Utils.escapeHtml(Transcriber.translationLabel(meeting.translationLanguage))}</span>
               </div>
               ${meeting.translationError && !(meeting.translations || []).length ? `
                 <p class="text-sm" style="color: var(--danger, #e5484d); margin-bottom: var(--space-4);">Translation failed: ${Utils.escapeHtml(meeting.translationError)}</p>
@@ -1523,6 +1712,15 @@ const App = {
 
   _llmProviderName(id) {
     return this._LLM_PROVIDER_NAMES[id] || id || 'the selected provider';
+  },
+
+  // "Translate To" options: two-way pairs first, then single target languages.
+  _translationTargetOptions(selected) {
+    const option = (value, name) =>
+      `<option value="${Utils.escapeHtml(value)}" ${value === selected ? 'selected' : ''}>${Utils.escapeHtml(name)}</option>`;
+    const pairs = Transcriber.getTranslationPairs().map(pair => option(pair.code, pair.name));
+    const singles = Transcriber.getTranslationLanguages().map(language => option(language.sonioxCode, language.name));
+    return [...pairs, ...singles].join('');
   },
 
   // Language picker for the summary. "Auto" keeps the meeting's own language.
@@ -2130,9 +2328,7 @@ const App = {
     const langOptions = `<option value="auto" ${settings.language === 'auto' ? 'selected' : ''}>Auto-detect multilingual</option>` + languages.map(l =>
       `<option value="${l.code}" ${l.code === settings.language ? 'selected' : ''}>${l.name}</option>`
     ).join('');
-    const translationOptions = Transcriber.getTranslationLanguages().map(language =>
-      `<option value="${language.sonioxCode}" ${language.sonioxCode === settings.translationLanguage ? 'selected' : ''}>${language.name}</option>`
-    ).join('');
+    const translationOptions = this._translationTargetOptions(settings.translationLanguage);
 
     return `
       <div class="view-enter" style="max-width: 700px;">
@@ -2187,7 +2383,7 @@ const App = {
         <!-- Speech & Translation -->
         <div class="settings-section">
           <h3 style="margin-bottom: var(--space-2);">Speech &amp; Translation</h3>
-          <p class="text-sm text-secondary" style="margin-bottom: var(--space-4);">Secrets stay in the operating system's secure credential storage — macOS Keychain or Windows DPAPI — and are never returned to the browser. The selected provider transcribes <strong>uploaded recordings</strong>, and also <strong>live recording</strong> when it supports streaming (Soniox, Deepgram). Whisper, Google and Azure are upload-only; live recording falls back to Soniox. For Khmer, choose Azure Speech and upload the recording.</p>
+          <p class="text-sm text-secondary" style="margin-bottom: var(--space-4);">Secrets stay in the operating system's secure credential storage — macOS Keychain or Windows DPAPI — and are never returned to the browser. The selected provider transcribes <strong>uploaded recordings</strong>, and also <strong>live recording</strong> when it supports streaming (Soniox, Deepgram, Azure Speech). Whisper and Google are upload-only; live recording falls back to Soniox. Khmer is always heard live by Azure Speech (it needs the Azure Speech key and region), which also shows the translation.</p>
 
           <div class="settings-row">
             <div class="settings-row-info">
@@ -2237,35 +2433,9 @@ const App = {
             <button class="btn btn-secondary btn-sm" id="stt-test-key">Test Connection</button>
           </div>
 
-          <h4 style="margin: var(--space-6) 0 var(--space-2);">Azure Translator</h4>
-          <p class="text-sm text-secondary" style="margin-bottom: var(--space-4);">Translates the transcript when the speech provider cannot: live captions into languages Soniox lacks (for example Vietnamese → Khmer), Deepgram live captions, and uploads from Deepgram, Whisper, Google or Azure Speech.</p>
-
-          <div class="settings-row">
-            <div class="settings-row-info">
-              <h4>Translator status</h4>
-              <p id="translator-status-text">Checking configuration…</p>
-            </div>
-            <span class="badge badge-warning" id="translator-status-badge" style="white-space: nowrap;">Checking</span>
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-info">
-              <h4>Translator API Key</h4>
-              <p>Key of the Translator resource. Protected by macOS Keychain or Windows DPAPI.</p>
-            </div>
-            <input type="password" class="input" id="setting-translator-key" placeholder="Enter API key" autocomplete="off" style="width: 280px;">
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-info">
-              <h4>Translator Region</h4>
-              <p>Location of the Translator resource (e.g. southeastasia). Leave empty for a Global resource.</p>
-            </div>
-            <input type="text" class="input" id="setting-translator-region" placeholder="e.g. southeastasia" autocomplete="off" spellcheck="false" style="width: 280px;" value="${Utils.escapeHtml(settings.translatorRegion || '')}">
-          </div>
-          <div class="flex gap-2" style="margin-top: var(--space-2);">
-            <button class="btn btn-secondary btn-sm" id="translator-save-key">Save Key</button>
-            <button class="btn btn-ghost btn-sm" id="translator-remove-key">Remove Key</button>
-            <button class="btn btn-secondary btn-sm" id="translator-test">Test Connection</button>
-          </div>
+          <h4 style="margin: var(--space-6) 0 var(--space-2);">Azure keys</h4>
+          <p class="text-sm text-secondary" style="margin-bottom: var(--space-4);">Two separate Azure resources, each with its own key and region. <strong>Azure Speech</strong> listens: Khmer live recording and Azure uploads. <strong>Azure Translator</strong> translates text: live captions into languages Soniox lacks (for example Vietnamese → Khmer), Deepgram live captions, and uploads from providers that cannot translate. One resource's key does not work for the other.</p>
+          ${['speech', 'translator'].map(kind => this._renderAzureKeyBlock(kind, settings)).join('')}
         </div>
 
         <!-- Meeting Notes AI -->
@@ -2399,7 +2569,8 @@ const App = {
     this._bindProviderControls('stt');
     this._refreshProviders('llm');
     this._bindProviderControls('llm');
-    this._bindTranslatorControls();
+    this._bindAzureKeyControls('speech');
+    this._bindAzureKeyControls('translator');
 
     // Resolve a provider/model selection, blocking a not-ready default. Returns
     // { provider, models } or null if the chosen provider cannot be the default.
@@ -2426,7 +2597,9 @@ const App = {
         // Keep a region typed into the visible Azure row without a key re-save.
         const regionInput = document.getElementById('setting-stt-region');
         if (regionInput?.value.trim() && !(await this._saveProviderRegion('stt', document.getElementById('setting-stt-provider')?.value))) return;
-        if (!(await this._saveTranslatorRegion())) return;
+        const speechRegion = document.getElementById('setting-azure-speech-region');
+        if (speechRegion?.value.trim() && !(await this._saveAzureKeyRegion('speech'))) return;
+        if (!(await this._saveAzureKeyRegion('translator'))) return;
 
         Storage.saveSettings({
           language: document.getElementById('setting-language').value,
@@ -2624,7 +2797,9 @@ const App = {
       statusBadge.textContent = label.text;
     }
     if (statusText) statusText.textContent = provider.message || '';
-    if (keyControls) keyControls.style.display = provider.needsKey ? '' : 'none';
+    // Azure Speech's key and region are managed in the always-visible Azure keys block.
+    if (keyControls) keyControls.style.display = provider.needsKey && provider.id !== 'azure' ? '' : 'none';
+    if (statusText && provider.id === 'azure') statusText.textContent = `${provider.message || ''} Key and region: Azure keys, below.`.trim();
     if (keyLabel) keyLabel.textContent = `${provider.name} API Key`;
     const regionRow = document.getElementById(`${cfg.prefix}-region-row`);
     const regionInput = document.getElementById(`setting-${cfg.prefix}-region`);
@@ -2636,18 +2811,92 @@ const App = {
     if (testButton) testButton.textContent = provider.kind === 'cli' ? 'Connect / Check Codex' : 'Test Connection';
   },
 
-  async _refreshTranslatorStatus() {
-    const text = document.getElementById('translator-status-text');
-    const badge = document.getElementById('translator-status-badge');
+  // The two Azure keys shown together in Settings. Element ids derive from
+  // `prefix` (the Translator ones keep their original ids).
+  _AZURE_KEY_UI: {
+    speech: {
+      prefix: 'azure-speech',
+      title: 'Azure Speech — listening',
+      name: 'Azure Speech',
+      keyHelp: 'Key of the Speech resource. Protected by macOS Keychain or Windows DPAPI.',
+      regionHelp: 'Location of the Speech resource, shown next to its keys in the Azure portal.',
+      regionRequired: true,
+      keyUrl: '/api/stt/providers/azure/key',
+      testUrl: '/api/stt/providers/azure/test',
+      readRegion: settings => (settings.sttRegions || {}).azure || '',
+      regionPatch: (settings, region) => ({ sttRegions: { ...(settings.sttRegions || {}), azure: region } }),
+      async status() {
+        const response = await fetch('/api/stt/providers', { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || data.error || 'Could not load Azure Speech status');
+        const provider = (data.providers || []).find(item => item.id === 'azure');
+        return { state: provider?.state || 'setup_required', message: provider?.message || '' };
+      }
+    },
+    translator: {
+      prefix: 'translator',
+      title: 'Azure Translator — translation',
+      name: 'Translator',
+      keyHelp: 'Key of the Translator resource. Protected by macOS Keychain or Windows DPAPI.',
+      regionHelp: 'Location of the Translator resource. Leave empty only for a Global resource.',
+      regionRequired: false,
+      keyUrl: '/api/translator/key',
+      testUrl: '/api/translator/test',
+      readRegion: settings => settings.translatorRegion || '',
+      regionPatch: (_settings, region) => ({ translatorRegion: region }),
+      async status() {
+        const response = await fetch('/api/translator', { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || data.error || 'Could not load Translator status');
+        return { state: data.configured ? 'ready' : 'setup_required', message: data.message || '' };
+      }
+    }
+  },
+
+  _renderAzureKeyBlock(kind, settings) {
+    const cfg = this._AZURE_KEY_UI[kind];
+    const p = cfg.prefix;
+    return `
+          <h4 style="margin: var(--space-4) 0 var(--space-1);">${Utils.escapeHtml(cfg.title)}</h4>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <h4>${Utils.escapeHtml(cfg.name)} status</h4>
+              <p id="${p}-status-text">Checking configuration…</p>
+            </div>
+            <span class="badge badge-warning" id="${p}-status-badge" style="white-space: nowrap;">Checking</span>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <h4>${Utils.escapeHtml(cfg.name)} API Key</h4>
+              <p>${Utils.escapeHtml(cfg.keyHelp)}</p>
+            </div>
+            <input type="password" class="input" id="setting-${p}-key" placeholder="Enter API key" autocomplete="off" style="width: 280px;">
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <h4>${Utils.escapeHtml(cfg.name)} Region</h4>
+              <p>${Utils.escapeHtml(cfg.regionHelp)}</p>
+            </div>
+            <input type="text" class="input" id="setting-${p}-region" placeholder="e.g. southeastasia" autocomplete="off" spellcheck="false" style="width: 280px;" value="${Utils.escapeHtml(cfg.readRegion(settings))}">
+          </div>
+          <div class="flex gap-2" style="margin-top: var(--space-2);">
+            <button class="btn btn-secondary btn-sm" id="${p}-save-key">Save Key</button>
+            <button class="btn btn-ghost btn-sm" id="${p}-remove-key">Remove Key</button>
+            <button class="btn btn-secondary btn-sm" id="${p}-test">Test Connection</button>
+          </div>`;
+  },
+
+  async _refreshAzureKeyStatus(kind) {
+    const cfg = this._AZURE_KEY_UI[kind];
+    const text = document.getElementById(`${cfg.prefix}-status-text`);
+    const badge = document.getElementById(`${cfg.prefix}-status-badge`);
     if (!text || !badge) return;
     try {
-      const response = await fetch('/api/translator', { cache: 'no-store' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message || data.error || 'Could not load Translator status');
-      const label = data.configured ? this._PROVIDER_STATE_LABEL.ready : this._PROVIDER_STATE_LABEL.setup_required;
+      const status = await cfg.status();
+      const label = this._PROVIDER_STATE_LABEL[status.state] || this._PROVIDER_STATE_LABEL.setup_required;
       badge.className = `badge ${label.badge}`;
       badge.textContent = label.text;
-      text.textContent = data.message || '';
+      text.textContent = status.message;
     } catch (error) {
       badge.className = 'badge badge-warning';
       badge.textContent = 'Unavailable';
@@ -2655,66 +2904,73 @@ const App = {
     }
   },
 
-  // Save the Translator region (blank = Global resource). Returns false when
-  // the typed value is not a region id.
-  async _saveTranslatorRegion() {
-    const region = (document.getElementById('setting-translator-region')?.value || '').trim().toLowerCase();
-    if (region && !/^[a-z0-9]{2,40}$/.test(region)) {
-      this.toast('Enter the Translator region, e.g. southeastasia (or leave it empty for Global)', 'error');
+  // Save an Azure key block's region. Returns false (and toasts) when it is
+  // malformed, or empty where the resource needs one.
+  async _saveAzureKeyRegion(kind) {
+    const cfg = this._AZURE_KEY_UI[kind];
+    const region = (document.getElementById(`setting-${cfg.prefix}-region`)?.value || '').trim().toLowerCase();
+    if ((region || cfg.regionRequired) && !/^[a-z0-9]{2,40}$/.test(region)) {
+      this.toast(`Enter the ${cfg.name} region, e.g. southeastasia${cfg.regionRequired ? '' : ' (or leave it empty for Global)'}`, 'error');
       return false;
     }
-    Storage.saveSettings({ translatorRegion: region });
+    Storage.saveSettings(cfg.regionPatch(Storage.getSettings(), region));
     await Storage.flush();
     return true;
   },
 
-  _bindTranslatorControls() {
-    this._refreshTranslatorStatus();
+  _bindAzureKeyControls(kind) {
+    const cfg = this._AZURE_KEY_UI[kind];
+    const p = cfg.prefix;
+    const refresh = async () => {
+      await this._refreshAzureKeyStatus(kind);
+      if (kind === 'speech') await this._refreshProviders('stt'); // keeps the provider picker in step
+    };
     const request = async (url, options, success) => {
       const response = await fetch(url, options);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error?.message || data.error || 'Request failed');
       this.toast(data.message || success, 'success');
     };
+    this._refreshAzureKeyStatus(kind);
 
-    document.getElementById('translator-save-key')?.addEventListener('click', async () => {
-      const input = document.getElementById('setting-translator-key');
+    document.getElementById(`${p}-save-key`)?.addEventListener('click', async () => {
+      const input = document.getElementById(`setting-${p}-key`);
       const apiKey = input?.value.trim();
       if (!apiKey) { this.toast('Enter an API key first', 'error'); return; }
       try {
-        if (!(await this._saveTranslatorRegion())) return;
-        await request('/api/translator/key', {
+        if (!(await this._saveAzureKeyRegion(kind))) return;
+        await request(cfg.keyUrl, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ apiKey })
-        }, 'Translator key saved');
+        }, `${cfg.name} key saved`);
         input.value = '';
       } catch (error) {
         this.toast(error.message, 'error');
       }
-      await this._refreshTranslatorStatus();
+      await refresh();
     });
 
-    document.getElementById('translator-remove-key')?.addEventListener('click', async () => {
+    document.getElementById(`${p}-remove-key`)?.addEventListener('click', async () => {
       try {
-        await request('/api/translator/key', { method: 'DELETE' }, 'Translator key removed');
+        await request(cfg.keyUrl, { method: 'DELETE' }, `${cfg.name} key removed`);
       } catch (error) {
         this.toast(error.message, 'error');
       }
-      await this._refreshTranslatorStatus();
+      await refresh();
     });
 
-    document.getElementById('translator-test')?.addEventListener('click', async event => {
+    document.getElementById(`${p}-test`)?.addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
       try {
-        if (!(await this._saveTranslatorRegion())) return;
-        await request('/api/translator/test', { method: 'POST' }, 'Translator connection succeeded');
+        if (!(await this._saveAzureKeyRegion(kind))) return;
+        await request(cfg.testUrl, { method: 'POST' }, `${cfg.name} connection succeeded`);
       } catch (error) {
         this.toast(error.message, 'error');
       } finally {
         button.disabled = false;
-        await this._refreshTranslatorStatus();
+        await refresh();
       }
     });
   },
@@ -3024,7 +3280,8 @@ const App = {
           body: JSON.stringify({
             meetingId: meeting.id,
             language: meeting.language,
-            translationLanguage: meeting.translationLanguage
+            translationLanguage: meeting.translationLanguage,
+            ...(meeting.sttProvider ? { provider: meeting.sttProvider } : {})
           })
       });
       const result = await response.json().catch(() => ({}));

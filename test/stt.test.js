@@ -132,3 +132,29 @@ test('oversized audio is rejected before the file is read', async () => {
   );
   assert.strictEqual(loaded, false, 'loadAudio must not run for an oversized file');
 });
+
+test('Khmer / Vietnamese / English set: Azure gets the candidate locales, other providers auto-detect', async () => {
+  const definitions = [];
+  await withFetch(async (url, init) => {
+    definitions.push(JSON.parse(init.body.get('definition')));
+    return { ok: true, status: 200, json: async () => ({ durationMilliseconds: 1000, phrases: [{ offsetMilliseconds: 0, text: 'xin chào', locale: 'vi-VN' }] }) };
+  }, () => createAzureAdapter({ getKey: async () => 'k', getRegion: async () => 'southeastasia', timeoutMs: 5000 })
+    .transcribe({ audio: sampleAudio, language: 'auto-km-vi-en' }));
+  assert.deepStrictEqual(definitions[0].locales, ['km-KH', 'vi-VN', 'en-US']);
+
+  // Deepgram has no candidate-language detection: the set becomes plain auto-detect.
+  const { createSttService } = require('../server/stt');
+  const service = createSttService({
+    timeoutMs: 5000,
+    secretStore: { read: async () => 'key', write: async () => {}, remove: async () => {} },
+    getSettings: async () => ({})
+  });
+  const urls = [];
+  await withFetch(async url => {
+    urls.push(String(url));
+    return { ok: true, status: 200, json: async () => ({ metadata: { duration: 1 }, results: { channels: [{ alternatives: [{ transcript: 'hi', words: [] }] }] } }) };
+  }, () => service.transcribe({ providerId: 'deepgram', audioMeta: { size: 1, mimeType: 'audio/webm' }, loadAudio: async () => Buffer.from('x'), language: 'auto-km-vi-en' })
+    .catch(() => {})); // only the request matters here
+  assert.strictEqual(urls.length, 1);
+  assert.ok(!/language=auto/.test(urls[0]), urls[0]);
+});

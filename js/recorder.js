@@ -332,6 +332,12 @@ const Recorder = {
     this._recordingStream = null;
   },
 
+  // The stream being recorded (mic, or mic + system audio mixed), for live
+  // backends that read audio directly instead of MediaRecorder chunks.
+  getRecordingStream() {
+    return this.isRecording ? this._recordingStream : null;
+  },
+
   getElapsedSeconds() {
     return Math.floor(this.getElapsedMs() / 1000);
   },
