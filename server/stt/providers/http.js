@@ -6,22 +6,32 @@
 
 const { STT_ERROR, sttError } = require('../contracts');
 
+// Socket errors from a pooled keep-alive connection the far end already
+// dropped (Azure resets idle ones after ~10-15 s). The request never reached
+// the service, so an idempotent call can safely go out again.
+const STALE_CONNECTION_CODES = new Set(['ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET', 'UND_ERR_CLOSED']);
+
 /**
  * fetch with an enforced timeout. `body` may be a Buffer, FormData or string.
  * Network/abort failures become typed TIMEOUT / PROVIDER_UNAVAILABLE errors.
+ * `retryStaleConnection` resends once after a stale-connection reset; use it
+ * only for idempotent calls (token issue, text translation).
  */
-async function fetchWithTimeout(url, { method = 'POST', headers, body, timeoutMs, provider }) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { method, headers: headers || {}, body, signal: controller.signal });
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      throw sttError(STT_ERROR.TIMEOUT, 'The transcription request timed out.', { provider });
+async function fetchWithTimeout(url, { method = 'POST', headers, body, timeoutMs, provider, retryStaleConnection = false }) {
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { method, headers: headers || {}, body, signal: controller.signal });
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw sttError(STT_ERROR.TIMEOUT, 'The transcription request timed out.', { provider });
+      }
+      if (retryStaleConnection && attempt === 0 && STALE_CONNECTION_CODES.has(error.cause?.code)) continue;
+      throw sttError(STT_ERROR.PROVIDER_UNAVAILABLE, 'Could not reach the provider.', { provider });
+    } finally {
+      clearTimeout(timer);
     }
-    throw sttError(STT_ERROR.PROVIDER_UNAVAILABLE, 'Could not reach the provider.', { provider });
-  } finally {
-    clearTimeout(timer);
   }
 }
 

@@ -6,6 +6,7 @@
    ============================================ */
 
 const { STT_ERROR, sttError } = require('../contracts');
+const { parseTranslationPair } = require('../../translate/translation-pairs');
 
 const API_BASE = 'https://api.soniox.com/v1';
 const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
@@ -29,6 +30,9 @@ async function sonioxJson(apiKey, pathname, options = {}) {
   return content;
 }
 
+// About 20 s of speech: the cap for translated text, which has no timestamps.
+const MAX_UNTIMED_SEGMENT_CHARS = 400;
+
 // Group Soniox tokens (streamed characters with speaker/language) into segments.
 function buildSegments(tokens, translation = false) {
   const segments = [];
@@ -46,26 +50,39 @@ function buildSegments(tokens, translation = false) {
     current = null;
   };
 
+  // Translated tokens carry no timestamps: they take the position of the
+  // latest spoken token and are capped by length instead of duration.
+  let lastSpokenMs = 0;
   for (const token of tokens) {
     const isTranslation = token?.translation_status === 'translation';
+    const timed = Boolean(Number(token?.start_ms) || Number(token?.end_ms));
+    if (!isTranslation && timed) lastSpokenMs = Number(token.start_ms) || Number(token.end_ms);
     if (isTranslation !== translation || !token?.text) continue;
     const speaker = token.speaker || '';
     const language = token.language || token.source_language || '';
-    const startMs = Number(token.start_ms) || Number(token.end_ms) || 0;
-    const endMs = Number(token.end_ms) || startMs;
+    const startMs = timed ? (Number(token.start_ms) || Number(token.end_ms)) : lastSpokenMs;
+    const endMs = timed ? (Number(token.end_ms) || startMs) : startMs;
     if (current && ((speaker && current.speaker && speaker !== current.speaker) ||
       (language && current.language && language !== current.language))) flush();
-    if (!current) current = { text: '', startMs, endMs, speaker, language };
+    if (!current) current = { text: '', startMs, endMs, speaker, language, untimed: !timed };
     current.text += token.text;
     current.endMs = endMs;
-    if (/[.!?。！？]\s*$/.test(current.text) || current.endMs - current.startMs >= 20_000) flush();
+    const tooLong = current.untimed
+      ? current.text.length >= MAX_UNTIMED_SEGMENT_CHARS
+      : current.endMs - current.startMs >= 20_000;
+    if (/[.!?。！？…]["'”’»)\]]*\s*$/.test(current.text) || tooLong) flush();
   }
   flush();
   return segments;
 }
 
+// App languages Soniox cannot recognise or translate into. They are left to
+// auto-detect here, and translation into them falls back to Azure Translator.
+const UNSUPPORTED_LANGUAGES = new Set(['km']);
+
 function toLangCode(value) {
-  return value && value !== 'auto' ? String(value).split('-')[0].toLowerCase() : '';
+  const code = value && value !== 'auto' ? String(value).split('-')[0].toLowerCase() : '';
+  return UNSUPPORTED_LANGUAGES.has(code) ? '' : code;
 }
 
 /**
@@ -123,13 +140,16 @@ function createSonioxAdapter(deps) {
       fileId = uploaded.id;
 
       const sourceLanguage = toLangCode(language);
-      const targetLanguage = toLangCode(translationLanguage);
+      const pair = parseTranslationPair(translationLanguage);
+      const targetLanguage = pair ? '' : toLangCode(translationLanguage);
+      const hints = [...new Set([sourceLanguage, pair?.primary, pair?.secondary].filter(Boolean))];
       const config = {
         model: 'stt-async-v5',
         file_id: fileId,
         enable_language_identification: true,
         enable_speaker_diarization: true,
-        ...(sourceLanguage ? { language_hints: [sourceLanguage] } : {}),
+        ...(hints.length ? { language_hints: hints } : {}),
+        ...(pair ? { translation: { type: 'two_way', language_a: pair.primary, language_b: pair.secondary } } : {}),
         ...(targetLanguage && targetLanguage !== sourceLanguage
           ? { translation: { type: 'one_way', target_language: targetLanguage } }
           : {})
@@ -173,4 +193,4 @@ function createSonioxAdapter(deps) {
   return { id, name: 'Soniox', kind: 'api', needsKey: true, supportsTranslation: true, supportsLive: true, maxUploadBytes: MAX_UPLOAD_BYTES, getStatus, listModels, testConnection, transcribe };
 }
 
-module.exports = { createSonioxAdapter };
+module.exports = { createSonioxAdapter, buildSegments };

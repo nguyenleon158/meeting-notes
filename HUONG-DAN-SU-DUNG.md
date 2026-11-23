@@ -135,8 +135,41 @@ API key được bảo vệ bằng Windows DPAPI trên Windows hoặc macOS Keyc
 | Deepgram | Có | Có | Không | Live cần API key có quyền tạo temporary token; upload vẫn có thể hoạt động nếu thiếu quyền này. |
 | OpenAI Whisper | Không | Có | Không | File tối đa 25 MB. Live recording sẽ fallback sang Soniox. |
 | Google Speech-to-Text | Không | Có | Không | File inline khoảng 10 MB; hỗ trợ tốt WebM/Opus, MP3, OGG, WAV và FLAC. Live recording sẽ fallback sang Soniox. |
+| Azure Speech | Có | Có | Có | Hỗ trợ tiếng Khmer. Cần cả API key và Region (ví dụ `southeastasia`). File dưới 2 giờ và 250 MB. Live cần chọn ngôn ngữ nói cụ thể (không dùng Auto-detect) và không tách người nói. |
 
-Nếu chọn Whisper hoặc Google nhưng vẫn muốn ghi trực tiếp, cần cấu hình thêm Soniox vì app dùng Soniox cho luồng live fallback.
+Họp bằng tiếng Khmer: chọn tab **Khmer (Cambodia)**, ngôn ngữ nói là Khmer. Tab này luôn dùng Azure Speech, dù Settings đang chọn provider nào (Soniox và Deepgram chưa hỗ trợ Khmer), nên cần nhập key và Region của Azure Speech trước. Nếu chọn Translate To (ví dụ Tiếng Việt), cột trái hiện tiếng Khmer, cột phải hiện bản dịch gần như ngay lúc nói. Gói Free F0 có 5 giờ live mỗi tháng; gói S0 khoảng $1/giờ, có dịch khoảng $2.5/giờ. Upload file tiếng Khmer: chọn provider Azure Speech.
+
+Họp xen kẽ tiếng Khmer, tiếng Việt và tiếng Anh: trong tab **Khmer (Cambodia)**, chọn ngôn ngữ nói **Tự nhận: Khmer / Tiếng Việt / English**. Azure Speech nhận ngôn ngữ của từng câu rồi dịch sang ngôn ngữ ở Translate To (câu đã đúng ngôn ngữ đích thì giữ nguyên). Từ đầu tiên ngay sau lúc đổi ngôn ngữ đôi khi bị nhận nhầm. Khi upload, lựa chọn này dùng được với Azure Speech; provider khác sẽ tự nhận ngôn ngữ như Auto-detect (không có tiếng Khmer).
+
+### Ba loại cuộc họp (Meeting Type)
+
+Khi tạo cuộc họp, chọn một trong ba tab:
+
+- **Single language**: cả cuộc họp nói một ngôn ngữ, dịch sang một ngôn ngữ. Dùng provider đang chọn trong Settings (mặc định Soniox).
+- **Multi-language**: người nói đổi qua lại giữa các ngôn ngữ. Tiếng Anh (hoặc tiếng khác) dịch ra tiếng Việt, tiếng Việt dịch ra tiếng Anh. Ghi trực tiếp luôn chạy bằng Soniox (Deepgram nếu Settings chọn Deepgram), vì Azure Speech không nghe được chế độ tự nhận ngôn ngữ.
+- **Khmer (Cambodia)**: dành cho thị trường Campuchia. Luôn ghi và dịch bằng Azure Speech (cần key và Region của Azure Speech). Nói Khmer, tự nhận Khmer/Việt/Anh, tiếng Việt hoặc tiếng Anh; dịch ra Việt, Anh, Khmer hoặc Việt ↔ Anh.
+
+Lần sau mở form, app mở sẵn tab của cuộc họp gần nhất.
+
+### Dịch hai chiều Tiếng Việt ↔ English
+
+Họp có người nói tiếng Anh xen người nói tiếng Việt: chọn tab **Multi-language** (Translate To mặc định là **Tiếng Việt ↔ English**). Câu tiếng Anh được dịch ra tiếng Việt, câu tiếng Việt được dịch ra tiếng Anh, cùng hiện trong cột bản dịch.
+
+- Với Soniox (mặc định), chỉ tiếng Việt và tiếng Anh được dịch. Ngôn ngữ thứ ba (Nhật, Trung...) chỉ được chép lại, không dịch.
+- Với Azure Speech (họp có tiếng Khmer), mọi ngôn ngữ khác tiếng Việt được dịch ra tiếng Việt; tiếng Việt dịch ra tiếng Anh.
+- Với Deepgram, Whisper, Google, app dịch từng câu qua Azure Translator (cần key Translator).
+
+### Dịch bằng Azure Translator (ví dụ nói tiếng Việt, dịch ra tiếng Khmer)
+
+Soniox chỉ dịch được sang các ngôn ngữ nó hỗ trợ. Với ngôn ngữ khác (như Khmer), hoặc khi provider không tự dịch (Deepgram, Whisper, Google, Azure Speech), app dùng **Azure Translator**:
+
+1. Vào **Settings → Speech & Translation → Azure Translator**, dán key của Translator resource và nhập Region (ví dụ `southeastasia`; để trống nếu resource là Global).
+2. Chọn **Save Key** rồi **Test Connection**.
+3. Khi tạo cuộc họp, chọn **Translate To: ភាសាខ្មែរ (Khmer)**. Khi ghi âm trực tiếp, mỗi câu nói xong sẽ được dịch và hiện bên cột bản dịch; khi upload, toàn bộ transcript được dịch sau khi chuyển giọng nói xong.
+
+Gói Free của Translator cho 2 triệu ký tự mỗi tháng. Nếu dịch lỗi (hết hạn mức, sai key), transcript gốc vẫn được giữ và lỗi hiện ở tab Translation.
+
+Nếu chọn Whisper, Google hoặc Azure nhưng vẫn muốn ghi trực tiếp, cần cấu hình thêm Soniox vì app dùng Soniox cho luồng live fallback.
 
 ## 5. Kết nối Codex để tạo summary
 
@@ -206,8 +239,8 @@ Chọn **Meeting Setup** khi muốn cấu hình trước:
 
 1. Nhập **Meeting Title**.
 2. Nhập người tham gia, cách nhau bằng dấu phẩy.
-3. Chọn **Spoken Language**; chọn Auto nếu cuộc họp có nhiều ngôn ngữ.
-4. Chọn **Translate To** nếu dùng Soniox và muốn dịch trực tiếp.
+3. Chọn **Meeting Type**: Single language, Multi-language hoặc Khmer (Cambodia) (xem mục 4).
+4. Chọn **Spoken Language** và **Translate To** trong tab đó.
 5. Bật **System Audio** nếu muốn thu âm thanh từ Zoom, Google Meet hoặc tab trình duyệt khác.
 6. Chọn **Start Recording**.
 
@@ -218,6 +251,19 @@ Khi trình duyệt hỏi quyền:
 - Nên đeo tai nghe để giảm tiếng vọng.
 
 Khi kết thúc, chọn **Stop Recording** và chờ app lưu audio/transcript.
+
+### Phụ đề dịch trên màn chiếu (khi chiếu slide)
+
+Trên màn hình ghi âm, hàng **Captions on screen**:
+
+- **Show in**: ngôn ngữ phụ đề cho khán giả. Chọn Tiếng Việt thì câu nói tiếng Việt hiện nguyên văn, câu tiếng khác hiện bản dịch tiếng Việt. Chọn "Tiếng Việt + English" thì có hai dòng. "As spoken" là chữ gốc, không dịch.
+- **Text size (px, 5–120)**: gõ số px hoặc bấm mũi tên, chữ trên màn chiếu đổi ngay. Mỗi cuộc họp nhớ cỡ đã chọn.
+- **Show over slides**: mở cửa sổ phụ đề nổi của app MeetNote. Cửa sổ nằm trên cả Keynote/PowerPoint đang chiếu toàn màn hình, nền trong suốt, chuột bấm xuyên qua. Lần đầu Chrome hỏi "Mở MeetNote?", chọn cho phép.
+- **Hide**: tắt phụ đề nổi. Phím **Control + Option + C** bật/tắt phụ đề từ bất kỳ app nào.
+- **Move / resize**: kéo giữa khung để di chuyển, kéo mép hoặc góc để đổi kích thước. Bấm **Done** hoặc nhấp đúp vào khung để khoá. App nhớ vị trí cho lần sau.
+- **Open in window**: phụ đề trong một cửa sổ trình duyệt, dùng khi slide không chiếu toàn màn hình.
+
+Menu chuột phải icon MeetNote ở Dock cũng có Hiện/Ẩn phụ đề và Chỉnh/Khoá vị trí. Phụ đề trễ khoảng 1–3 giây so với lời nói, và tự mờ đi sau khoảng 12 giây không có ai nói.
 
 ## 7. Upload file ghi âm có sẵn
 

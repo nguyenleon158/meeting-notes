@@ -7,8 +7,9 @@ turns transcripts into summaries, decisions, and action items.
 ## Highlights
 
 - Live recording with optional system audio capture
-- Speech-to-text through Soniox, Deepgram, OpenAI Whisper, or Google Speech-to-Text
-- Live translation with Soniox
+- Speech-to-text through Soniox, Deepgram, OpenAI Whisper, Google Speech-to-Text, or Azure Speech (adds Khmer), with Azure Translator for translations the speech provider cannot do (e.g. Vietnamese → Khmer live captions), and a two-way Vietnamese ↔ English translation mode
+- Live translation with Soniox, or with Azure Speech for Khmer (e.g. Khmer speech → Vietnamese captions), including meetings that switch between Khmer, Vietnamese and English
+- Live captions over full-screen slides (macOS app): a floating, click-through caption window in the audience's language, with adjustable text size and position
 - AI summaries and title suggestions through Codex, DeepSeek, or Google Gemini
 - Local meeting library with search, backup, export, and multi-select deletion
 - Rotating diagnostic logs and downloadable JSON bug reports
